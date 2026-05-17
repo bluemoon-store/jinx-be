@@ -19,6 +19,7 @@ import { SettingsModule } from 'src/modules/settings/settings.module';
 import { LegalModule } from 'src/modules/legal/legal.module';
 import { FaqModule } from 'src/modules/faq/faq.module';
 import { FileModule } from 'src/modules/file/file.module';
+import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
 
 import { HealthController } from './controllers/health.controller';
 import { CryptoPaymentModule } from 'src/modules/crypto-payment/crypto-payment.module';
@@ -51,6 +52,7 @@ import { CryptoPaymentModule } from 'src/modules/crypto-payment/crypto-payment.m
         LegalModule,
         FaqModule,
         FileModule,
+        DashboardModule,
     ],
     controllers: [HealthController],
 })

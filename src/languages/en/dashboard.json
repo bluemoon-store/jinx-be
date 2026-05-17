@@ -1,0 +1,12 @@
+{
+    "success": {
+        "summary": "Dashboard summary retrieved successfully",
+        "secondaryMetrics": "Dashboard secondary metrics retrieved successfully",
+        "sales": "Dashboard sales data retrieved successfully",
+        "revenueTrend": "Revenue trend retrieved successfully",
+        "ordersBreakdown": "Orders breakdown retrieved successfully",
+        "paymentMix": "Payment mix retrieved successfully",
+        "topCategories": "Top categories retrieved successfully",
+        "todayStats": "Today stats retrieved successfully"
+    }
+}
