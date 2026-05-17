@@ -4,6 +4,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DocResponse } from 'src/common/doc/decorators/doc.response.decorator';
 import { PublicRoute } from 'src/common/request/decorators/request.public.decorator';
 
+import { SettingsLandingResponseDto } from '../dtos/response/settings.landing.response';
 import { SettingsPublicResponseDto } from '../dtos/response/settings.public.response';
 import { SettingsService } from '../services/settings.service';
 
@@ -22,5 +23,17 @@ export class SettingsPublicController {
     })
     async getPublic(): Promise<SettingsPublicResponseDto> {
         return this.settingsService.getPublic();
+    }
+
+    @Get('landing')
+    @PublicRoute()
+    @ApiOperation({ summary: 'Get public landing-page text settings' })
+    @DocResponse({
+        serialization: SettingsLandingResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'settings.success.landingFound',
+    })
+    async getLanding(): Promise<SettingsLandingResponseDto> {
+        return this.settingsService.getLanding();
     }
 }

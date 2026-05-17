@@ -19,20 +19,56 @@ import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic
 
 import { SettingsScheduleMaintenanceRequestDto } from '../dtos/request/settings.schedule-maintenance.request';
 import { SettingsUpdateGeneralRequestDto } from '../dtos/request/settings.update-general.request';
+import { SettingsUpdateLandingRequestDto } from '../dtos/request/settings.update-landing.request';
 import { SettingsUpdateSocialRequestDto } from '../dtos/request/settings.update-social.request';
 import { SettingsEmailValidityTestResponseDto } from '../dtos/response/settings.email-validity-test.response';
 import { SettingsGeneralResponseDto } from '../dtos/response/settings.general.response';
+import { SettingsLandingResponseDto } from '../dtos/response/settings.landing.response';
 import { SettingsPublicResponseDto } from '../dtos/response/settings.public.response';
 import { SettingsSocialResponseDto } from '../dtos/response/settings.social.response';
 
 const CACHE_KEY = 'settings:public';
+const LANDING_CACHE_KEY = 'settings:landing';
 const CACHE_TTL_MS = 60_000;
 
 const KEYS = {
     supportLink: 'support_link',
     telegramLink: 'telegram_link',
     discordLink: 'discord_link',
+    landingHeroTitle: 'landing_hero_title',
+    landingHeroSubtitle: 'landing_hero_subtitle',
+    landingHotSellingDesc: 'landing_hot_selling_desc',
+    landingFreshlyDesc: 'landing_freshly_desc',
+    landingNewlyDesc: 'landing_newly_desc',
+    landingHowToDesc: 'landing_how_to_desc',
+    landingFeaturesDesc: 'landing_features_desc',
+    landingFaqDesc: 'landing_faq_desc',
 } as const;
+
+const LANDING_KEY_LIST = [
+    KEYS.landingHeroTitle,
+    KEYS.landingHeroSubtitle,
+    KEYS.landingHotSellingDesc,
+    KEYS.landingFreshlyDesc,
+    KEYS.landingNewlyDesc,
+    KEYS.landingHowToDesc,
+    KEYS.landingFeaturesDesc,
+    KEYS.landingFaqDesc,
+];
+
+const LANDING_FIELD_TO_KEY: Record<
+    keyof SettingsUpdateLandingRequestDto,
+    string
+> = {
+    heroTitle: KEYS.landingHeroTitle,
+    heroSubtitle: KEYS.landingHeroSubtitle,
+    hotSellingDesc: KEYS.landingHotSellingDesc,
+    freshlyDesc: KEYS.landingFreshlyDesc,
+    newlyDesc: KEYS.landingNewlyDesc,
+    howToDesc: KEYS.landingHowToDesc,
+    featuresDesc: KEYS.landingFeaturesDesc,
+    faqDesc: KEYS.landingFaqDesc,
+};
 
 @Injectable()
 export class SettingsService {
@@ -131,6 +167,72 @@ export class SettingsService {
             await this.cacheManager.del(CACHE_KEY);
         }
         return this.getSocial();
+    }
+
+    async getLanding(): Promise<SettingsLandingResponseDto> {
+        const cached =
+            await this.cacheManager.get<SettingsLandingResponseDto>(
+                LANDING_CACHE_KEY
+            );
+        if (cached) return cached;
+
+        const rows = await this.databaseService.systemSettings.findMany({
+            where: { key: { in: LANDING_KEY_LIST } },
+            select: { key: true, value: true },
+        });
+        const byKey = new Map(rows.map(row => [row.key, row.value]));
+        const out: SettingsLandingResponseDto = {
+            heroTitle: this.toPublicNullable(
+                byKey.get(KEYS.landingHeroTitle) ?? null
+            ),
+            heroSubtitle: this.toPublicNullable(
+                byKey.get(KEYS.landingHeroSubtitle) ?? null
+            ),
+            hotSellingDesc: this.toPublicNullable(
+                byKey.get(KEYS.landingHotSellingDesc) ?? null
+            ),
+            freshlyDesc: this.toPublicNullable(
+                byKey.get(KEYS.landingFreshlyDesc) ?? null
+            ),
+            newlyDesc: this.toPublicNullable(
+                byKey.get(KEYS.landingNewlyDesc) ?? null
+            ),
+            howToDesc: this.toPublicNullable(
+                byKey.get(KEYS.landingHowToDesc) ?? null
+            ),
+            featuresDesc: this.toPublicNullable(
+                byKey.get(KEYS.landingFeaturesDesc) ?? null
+            ),
+            faqDesc: this.toPublicNullable(
+                byKey.get(KEYS.landingFaqDesc) ?? null
+            ),
+        };
+
+        await this.cacheManager.set(LANDING_CACHE_KEY, out, CACHE_TTL_MS);
+        return out;
+    }
+
+    async updateLanding(
+        payload: SettingsUpdateLandingRequestDto
+    ): Promise<SettingsLandingResponseDto> {
+        let didUpdate = false;
+        for (const [field, key] of Object.entries(LANDING_FIELD_TO_KEY) as [
+            keyof SettingsUpdateLandingRequestDto,
+            string,
+        ][]) {
+            const value = payload[field];
+            if (value === undefined) continue;
+            await this.upsertSetting(
+                key,
+                'landing',
+                this.normalizeNullable(value)
+            );
+            didUpdate = true;
+        }
+        if (didUpdate) {
+            await this.cacheManager.del(LANDING_CACHE_KEY);
+        }
+        return this.getLanding();
     }
 
     async getPublic(): Promise<SettingsPublicResponseDto> {

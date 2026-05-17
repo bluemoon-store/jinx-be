@@ -5,6 +5,8 @@
         "socialFound": "Social settings retrieved successfully",
         "socialUpdated": "Social settings updated successfully",
         "publicFound": "Public settings retrieved successfully",
+        "landingFound": "Landing settings retrieved successfully",
+        "landingUpdated": "Landing settings updated successfully",
         "emailValidityTested": "Email validity URL tested successfully"
     },
     "error": {

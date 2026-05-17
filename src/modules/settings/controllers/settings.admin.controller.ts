@@ -14,9 +14,11 @@ import { AuditLog } from 'src/modules/activity-log/decorators/audit-log.decorato
 import { SettingsScheduleMaintenanceRequestDto } from '../dtos/request/settings.schedule-maintenance.request';
 import { SettingsTestEmailValidityRequestDto } from '../dtos/request/settings.test-email-validity.request';
 import { SettingsUpdateGeneralRequestDto } from '../dtos/request/settings.update-general.request';
+import { SettingsUpdateLandingRequestDto } from '../dtos/request/settings.update-landing.request';
 import { SettingsUpdateSocialRequestDto } from '../dtos/request/settings.update-social.request';
 import { SettingsEmailValidityTestResponseDto } from '../dtos/response/settings.email-validity-test.response';
 import { SettingsGeneralResponseDto } from '../dtos/response/settings.general.response';
+import { SettingsLandingResponseDto } from '../dtos/response/settings.landing.response';
 import { SettingsSocialResponseDto } from '../dtos/response/settings.social.response';
 import { SettingsService } from '../services/settings.service';
 
@@ -89,6 +91,39 @@ export class SettingsAdminController {
         @Body() payload: SettingsUpdateSocialRequestDto
     ): Promise<SettingsSocialResponseDto> {
         return this.settingsService.updateSocial(payload);
+    }
+
+    @Get('landing')
+    @AllowedRoles(READ_ADMIN_ROLES)
+    @ApiBearerAuth('accessToken')
+    @ApiOperation({ summary: 'Get admin landing-page text settings' })
+    @DocResponse({
+        serialization: SettingsLandingResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'settings.success.landingFound',
+    })
+    async getLanding(): Promise<SettingsLandingResponseDto> {
+        return this.settingsService.getLanding();
+    }
+
+    @Put('landing')
+    @AuditLog({
+        action: 'settings.landing.update',
+        category: ActivityLogCategory.SETTINGS,
+        resourceType: 'SystemSettings',
+    })
+    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @ApiBearerAuth('accessToken')
+    @ApiOperation({ summary: 'Update admin landing-page text settings' })
+    @DocResponse({
+        serialization: SettingsLandingResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'settings.success.landingUpdated',
+    })
+    async updateLanding(
+        @Body() payload: SettingsUpdateLandingRequestDto
+    ): Promise<SettingsLandingResponseDto> {
+        return this.settingsService.updateLanding(payload);
     }
 
     @Post('test-email-validity')
