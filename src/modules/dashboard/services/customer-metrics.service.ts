@@ -7,7 +7,10 @@ import { DashboardOrdersBreakdownResponseDto } from '../dtos/response/orders-bre
 import { KpiCardResponseDto } from '../dtos/response/kpi-card.response.dto';
 import { computeDeltaPct, computeTrend } from '../utils/kpi.util';
 import {
+    addBuckets,
     BucketUnit,
+    densifyBuckets,
+    enumerateBuckets,
     PeriodKey,
     PeriodRange,
     resolvePeriod,
@@ -15,6 +18,12 @@ import {
 } from '../utils/period.util';
 
 const SPARKLINE_WEEKS = 8;
+
+type OrdersBreakdownRow = {
+    bucket: Date;
+    new_customers: bigint;
+    returning_customers: bigint;
+};
 
 @Injectable()
 export class CustomerMetricsService {
@@ -53,17 +62,18 @@ export class CustomerMetricsService {
             GROUP BY 1
             ORDER BY 1 ASC
         `;
-        return this.toWeeklySparkline(rows, from);
+        const densified = densifyBuckets(
+            rows,
+            enumerateBuckets(from, to, 'week'),
+            bucket => ({ bucket, count: 0n })
+        );
+        return densified.map(row => Number(row.count));
     }
 
-    async getWeeklyCustomerTotalSparkline(
-        from: Date,
-        _to: Date
-    ): Promise<number[]> {
-        const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+    async getWeeklyCustomerTotalSparkline(from: Date): Promise<number[]> {
         const result: number[] = [];
         for (let i = 0; i < SPARKLINE_WEEKS; i++) {
-            const weekEnd = new Date(from.getTime() + (i + 1) * msPerWeek);
+            const weekEnd = addBuckets(from, 'week', i + 1);
             const count = await this.databaseService.user.count({
                 where: {
                     role: Role.USER,
@@ -126,13 +136,7 @@ export class CustomerMetricsService {
         const { from, to, bucket } = resolvePeriod(period);
         const trunc = this.assertTruncUnit(bucket);
 
-        const rows = await this.databaseService.$queryRaw<
-            Array<{
-                bucket: Date;
-                new_customers: bigint;
-                returning_customers: bigint;
-            }>
-        >`
+        const rows = await this.databaseService.$queryRaw<OrdersBreakdownRow[]>`
             WITH user_first_order AS (
                 SELECT o.user_id,
                        MIN(o.completed_at) AS first_at
@@ -161,8 +165,18 @@ export class CustomerMetricsService {
             ORDER BY 1 ASC
         `;
 
+        const densified = densifyBuckets(
+            rows,
+            enumerateBuckets(from, to, bucket),
+            bucket => ({
+                bucket,
+                new_customers: 0n,
+                returning_customers: 0n,
+            })
+        );
+
         return {
-            items: rows.map(row => ({
+            items: densified.map(row => ({
                 date: row.bucket,
                 newCustomers: Number(row.new_customers),
                 returningCustomers: Number(row.returning_customers),
@@ -199,38 +213,16 @@ export class CustomerMetricsService {
             ORDER BY 1 ASC
         `;
 
-        const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-        const byBucket = new Map(
-            rows.map(row => [row.bucket.getTime(), Number(row.rate ?? 0)])
+        const densified = densifyBuckets(
+            rows,
+            enumerateBuckets(from, to, 'week'),
+            bucket => ({ bucket, rate: 0 })
         );
-        const result: number[] = [];
-        for (let i = 0; i < SPARKLINE_WEEKS; i++) {
-            const bucketStart = new Date(from.getTime() + i * msPerWeek);
-            result.push(byBucket.get(bucketStart.getTime()) ?? 0);
-        }
-        return result;
+        return densified.map(row => Number(row.rate ?? 0));
     }
 
-    private toWeeklySparkline(
-        rows: Array<{ bucket: Date; count: bigint }>,
-        rangeFrom: Date
-    ): number[] {
-        const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-        const byBucket = new Map(
-            rows.map(row => [row.bucket.getTime(), Number(row.count)])
-        );
-        const result: number[] = [];
-        for (let i = 0; i < SPARKLINE_WEEKS; i++) {
-            const bucketStart = new Date(rangeFrom.getTime() + i * msPerWeek);
-            result.push(byBucket.get(bucketStart.getTime()) ?? 0);
-        }
-        return result;
-    }
-
-    private assertTruncUnit(
-        bucket: BucketUnit
-    ): 'hour' | 'day' | 'week' | 'month' {
-        const allowed = ['hour', 'day', 'week', 'month'] as const;
+    private assertTruncUnit(bucket: BucketUnit): BucketUnit {
+        const allowed: BucketUnit[] = ['hour', 'day', 'week', 'month'];
         if (!(allowed as readonly string[]).includes(bucket)) {
             throw new Error(`Invalid bucket: ${bucket}`);
         }

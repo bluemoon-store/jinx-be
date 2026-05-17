@@ -14,11 +14,13 @@ import { DashboardTopCategoriesResponseDto } from '../dtos/response/top-categori
 import { KpiCardResponseDto } from '../dtos/response/kpi-card.response.dto';
 import { computeDeltaPct, computeTrend } from '../utils/kpi.util';
 import {
+    addBuckets,
     PeriodKey,
     resolvePeriod,
     resolveSparklineWeeks,
     resolveSummaryDeltaWindow,
     resolveTodayYesterday,
+    truncToBucket,
 } from '../utils/period.util';
 import { CustomerMetricsService } from './customer-metrics.service';
 import { SalesMetricsService } from './sales-metrics.service';
@@ -133,10 +135,21 @@ export class DashboardService {
         to?: string,
         granularity: SalesGranularity = SalesGranularity.WEEK
     ): { from: Date; to: Date; granularity: SalesGranularity } {
-        const end = to ? new Date(to) : new Date();
-        const start = from
+        const rawEnd = to ? new Date(to) : new Date();
+        const rawStart = from
             ? new Date(from)
-            : new Date(end.getTime() - DEFAULT_SALES_WEEKS * 7 * MS_PER_DAY);
+            : new Date(rawEnd.getTime() - DEFAULT_SALES_WEEKS * 7 * MS_PER_DAY);
+
+        // Snap outward to bucket boundaries so each returned bucket is complete
+        // (date_trunc would otherwise label partial first/last buckets with the
+        // bucket-start, misrepresenting the data at the edges).
+        const start = truncToBucket(rawStart, granularity);
+        const truncatedEnd = truncToBucket(rawEnd, granularity);
+        const end =
+            rawEnd.getTime() === truncatedEnd.getTime()
+                ? truncatedEnd
+                : addBuckets(truncatedEnd, granularity, 1);
+
         return { from: start, to: end, granularity };
     }
 
@@ -187,17 +200,14 @@ export class DashboardService {
             ),
             this.salesMetrics.getWeeklyRevenueSparkline(
                 sparklineRange.from,
-                sparklineRange.to,
-                SPARKLINE_WEEKS
+                sparklineRange.to
             ),
             this.salesMetrics.getWeeklyOrderCountSparkline(
                 sparklineRange.from,
-                sparklineRange.to,
-                SPARKLINE_WEEKS
+                sparklineRange.to
             ),
             this.customerMetrics.getWeeklyCustomerTotalSparkline(
-                sparklineRange.from,
-                sparklineRange.to
+                sparklineRange.from
             ),
         ]);
 
@@ -241,10 +251,7 @@ export class DashboardService {
         ] = await Promise.all([
             this.salesMetrics.getAvgOrderValue(range.from, range.to),
             this.salesMetrics.getAvgOrderValue(range.prevFrom, range.prevTo),
-            this.buildAvgOrderValueSparkline(
-                sparklineRange.from,
-                sparklineRange.to
-            ),
+            this.buildAvgOrderValueSparkline(sparklineRange.from),
             this.customerMetrics.buildNewCustomersKpi(range),
             this.customerMetrics.buildFulfillmentRateKpi(range, (from, to) =>
                 this.salesMetrics.getFulfillmentRate(from, to)
@@ -305,18 +312,13 @@ export class DashboardService {
             this.salesMetrics.getAvgOrderValue(yesterdayStart, todayStart),
             this.salesMetrics.getWeeklyRevenueSparkline(
                 sparklineRange.from,
-                sparklineRange.to,
-                SPARKLINE_WEEKS
+                sparklineRange.to
             ),
             this.salesMetrics.getWeeklyOrderCountSparkline(
                 sparklineRange.from,
-                sparklineRange.to,
-                SPARKLINE_WEEKS
-            ),
-            this.buildAvgOrderValueSparkline(
-                sparklineRange.from,
                 sparklineRange.to
             ),
+            this.buildAvgOrderValueSparkline(sparklineRange.from),
         ]);
 
         return {
@@ -344,15 +346,11 @@ export class DashboardService {
         };
     }
 
-    private async buildAvgOrderValueSparkline(
-        from: Date,
-        _to: Date
-    ): Promise<number[]> {
-        const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+    private async buildAvgOrderValueSparkline(from: Date): Promise<number[]> {
         const points: number[] = [];
         for (let i = 0; i < SPARKLINE_WEEKS; i++) {
-            const weekFrom = new Date(from.getTime() + i * msPerWeek);
-            const weekTo = new Date(from.getTime() + (i + 1) * msPerWeek);
+            const weekFrom = addBuckets(from, 'week', i);
+            const weekTo = addBuckets(from, 'week', i + 1);
             const aov = await this.salesMetrics.getAvgOrderValue(
                 weekFrom,
                 weekTo

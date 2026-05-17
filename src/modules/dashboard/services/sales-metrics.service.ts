@@ -11,6 +11,8 @@ import { DashboardTopCategoriesResponseDto } from '../dtos/response/top-categori
 import { avgOrderValueString, decimalSumToString } from '../utils/kpi.util';
 import {
     BucketUnit,
+    densifyBuckets,
+    enumerateBuckets,
     PeriodKey,
     PeriodRange,
     resolvePeriod,
@@ -26,6 +28,12 @@ type BucketRow = {
     revenue: Prisma.Decimal | null;
     order_count: bigint;
 };
+
+const emptyBucketRow = (bucket: Date): BucketRow => ({
+    bucket,
+    revenue: null,
+    order_count: 0n,
+});
 
 @Injectable()
 export class SalesMetricsService {
@@ -63,26 +71,17 @@ export class SalesMetricsService {
         });
     }
 
-    async getWeeklyRevenueSparkline(
-        from: Date,
-        to: Date,
-        weekCount: number
-    ): Promise<number[]> {
+    async getWeeklyRevenueSparkline(from: Date, to: Date): Promise<number[]> {
         const rows = await this.queryOrderBuckets(from, to, 'week');
-        return this.toSparklineNumbers(rows, weekCount, from, r =>
-            Number(r.revenue?.toString() ?? '0')
-        );
+        return rows.map(row => Number(row.revenue?.toString() ?? '0'));
     }
 
     async getWeeklyOrderCountSparkline(
         from: Date,
-        to: Date,
-        weekCount: number
+        to: Date
     ): Promise<number[]> {
         const rows = await this.queryOrderBuckets(from, to, 'week');
-        return this.toSparklineNumbers(rows, weekCount, from, r =>
-            Number(r.order_count)
-        );
+        return rows.map(row => Number(row.order_count));
     }
 
     async getSales(
@@ -109,16 +108,17 @@ export class SalesMetricsService {
             this.queryOrderBuckets(prevFrom, prevTo, bucket),
         ]);
 
-        const previousByIndex = new Map(
-            previousRows.map((row, index) => [index, row])
-        );
-
-        const items = currentRows.map((row, index) => {
-            const prev = previousByIndex.get(index);
+        // After densification both arrays have exactly N rows ordered from
+        // bucket 0 (period start) to bucket N-1, so pairing by index aligns
+        // current bucket i with the equivalent bucket in the previous period.
+        const length = Math.max(currentRows.length, previousRows.length);
+        const items = Array.from({ length }, (_, index) => {
+            const current = currentRows[index];
+            const previous = previousRows[index];
             return {
-                date: row.bucket,
-                currentPeriod: decimalSumToString(row.revenue),
-                previousPeriod: decimalSumToString(prev?.revenue ?? null),
+                date: current?.bucket ?? previous?.bucket ?? new Date(0),
+                currentPeriod: decimalSumToString(current?.revenue ?? null),
+                previousPeriod: decimalSumToString(previous?.revenue ?? null),
             };
         });
 
@@ -220,13 +220,18 @@ export class SalesMetricsService {
         return avgOrderValueString(agg._sum.totalAmount, agg._count);
     }
 
+    /**
+     * Aggregate completed-order revenue and count by bucket, then densify so
+     * every bucket-start in [from, to) is present (missing buckets become
+     * `{ revenue: null, order_count: 0 }`).
+     */
     private async queryOrderBuckets(
         from: Date,
         to: Date,
         bucket: BucketUnit | SalesGranularity
     ): Promise<BucketRow[]> {
         const trunc = this.assertTruncUnit(bucket);
-        return this.databaseService.$queryRaw<BucketRow[]>`
+        const rows = await this.databaseService.$queryRaw<BucketRow[]>`
             SELECT date_trunc(${trunc}, o.completed_at) AS bucket,
                    COALESCE(SUM(o.total_amount), 0) AS revenue,
                    COUNT(*)::bigint AS order_count
@@ -239,33 +244,18 @@ export class SalesMetricsService {
             GROUP BY 1
             ORDER BY 1 ASC
         `;
+        return densifyBuckets(
+            rows,
+            enumerateBuckets(from, to, trunc),
+            emptyBucketRow
+        );
     }
 
-    private assertTruncUnit(
-        bucket: BucketUnit | SalesGranularity
-    ): 'hour' | 'day' | 'week' | 'month' {
-        const allowed = ['hour', 'day', 'week', 'month'] as const;
+    private assertTruncUnit(bucket: BucketUnit | SalesGranularity): BucketUnit {
+        const allowed: BucketUnit[] = ['hour', 'day', 'week', 'month'];
         if (!(allowed as readonly string[]).includes(bucket)) {
             throw new Error(`Invalid bucket: ${bucket}`);
         }
-        return bucket;
-    }
-
-    private toSparklineNumbers(
-        rows: BucketRow[],
-        pointCount: number,
-        rangeFrom: Date,
-        pickValue: (row: BucketRow) => number
-    ): number[] {
-        const byBucket = new Map(
-            rows.map(row => [row.bucket.getTime(), pickValue(row)])
-        );
-        const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-        const result: number[] = [];
-        for (let i = 0; i < pointCount; i++) {
-            const bucketStart = new Date(rangeFrom.getTime() + i * msPerWeek);
-            result.push(byBucket.get(bucketStart.getTime()) ?? 0);
-        }
-        return result;
+        return bucket as BucketUnit;
     }
 }

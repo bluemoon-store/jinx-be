@@ -19,42 +19,29 @@ export type PeriodRange = {
 const MS_PER_HOUR = 60 * 60 * 1000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 
+const PERIOD_BUCKET_COUNT: Record<
+    PeriodKey,
+    { bucket: BucketUnit; count: number }
+> = {
+    [PeriodKey.TWENTY_FOUR_HOURS]: { bucket: 'hour', count: 24 },
+    [PeriodKey.SEVEN_DAYS]: { bucket: 'day', count: 7 },
+    [PeriodKey.THIRTY_DAYS]: { bucket: 'day', count: 30 },
+    [PeriodKey.THREE_MONTHS]: { bucket: 'week', count: 13 },
+    [PeriodKey.TWELVE_MONTHS]: { bucket: 'month', count: 12 },
+};
+
 export function resolvePeriod(
     period: PeriodKey,
     now: Date = new Date()
 ): PeriodRange {
-    const to = new Date(now);
-    let from: Date;
-    let bucket: BucketUnit;
-
-    switch (period) {
-        case PeriodKey.TWENTY_FOUR_HOURS:
-            from = new Date(to.getTime() - 24 * MS_PER_HOUR);
-            bucket = 'hour';
-            break;
-        case PeriodKey.SEVEN_DAYS:
-            from = new Date(to.getTime() - 7 * MS_PER_DAY);
-            bucket = 'day';
-            break;
-        case PeriodKey.THIRTY_DAYS:
-            from = new Date(to.getTime() - 30 * MS_PER_DAY);
-            bucket = 'day';
-            break;
-        case PeriodKey.THREE_MONTHS:
-            from = subtractUtcMonths(to, 3);
-            bucket = 'week';
-            break;
-        case PeriodKey.TWELVE_MONTHS:
-        default:
-            from = subtractUtcMonths(to, 12);
-            bucket = 'month';
-            break;
-    }
-
-    const durationMs = to.getTime() - from.getTime();
-    const prevTo = new Date(from);
-    const prevFrom = new Date(from.getTime() - durationMs);
-
+    const { bucket, count } = PERIOD_BUCKET_COUNT[period];
+    // `to` = start of the next whole bucket after `now`. `from` = `to` minus N
+    // whole buckets. Every bucket in [from, to) is complete, so date_trunc
+    // labels never produce partial first/last buckets.
+    const to = addBuckets(truncToBucket(now, bucket), bucket, 1);
+    const from = addBuckets(to, bucket, -count);
+    const prevTo = from;
+    const prevFrom = addBuckets(prevTo, bucket, -count);
     return { from, to, prevFrom, prevTo, bucket };
 }
 
@@ -103,13 +90,16 @@ export function resolveTodayYesterday(now: Date = new Date()): {
     return { todayStart, tomorrowStart, yesterdayStart };
 }
 
-/** Last N UTC weeks ending at `now` (exclusive end = now). */
+/**
+ * Last N full ISO weeks ending at the most recent Monday on/before `now`.
+ * Boundaries are ISO Monday-aligned so they match postgres `date_trunc('week', ...)`.
+ */
 export function resolveSparklineWeeks(
     weekCount: number,
     now: Date = new Date()
 ): { from: Date; to: Date } {
-    const to = new Date(now);
-    const from = new Date(to.getTime() - weekCount * 7 * MS_PER_DAY);
+    const to = truncToBucket(now, 'week');
+    const from = addBuckets(to, 'week', -weekCount);
     return { from, to };
 }
 
@@ -127,16 +117,96 @@ export function resolveSummaryDeltaWindow(now: Date = new Date()): {
     return { currentFrom, currentTo, previousFrom, previousTo };
 }
 
-function subtractUtcMonths(date: Date, months: number): Date {
-    return new Date(
-        Date.UTC(
-            date.getUTCFullYear(),
-            date.getUTCMonth() - months,
-            date.getUTCDate(),
-            date.getUTCHours(),
-            date.getUTCMinutes(),
-            date.getUTCSeconds(),
-            date.getUTCMilliseconds()
-        )
+/**
+ * Snap a Date down to the start of its containing bucket in UTC. Matches
+ * postgres `date_trunc(unit, ...)`:
+ *  - hour: zero minutes/seconds/ms
+ *  - day:  UTC midnight
+ *  - week: ISO Monday (UTC midnight)
+ *  - month: 1st of month (UTC midnight)
+ */
+export function truncToBucket(date: Date, bucket: BucketUnit): Date {
+    const d = new Date(date);
+    switch (bucket) {
+        case 'hour':
+            d.setUTCMinutes(0, 0, 0);
+            return d;
+        case 'day':
+            d.setUTCHours(0, 0, 0, 0);
+            return d;
+        case 'week': {
+            d.setUTCHours(0, 0, 0, 0);
+            const day = d.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+            const offsetFromMonday = (day + 6) % 7;
+            d.setUTCDate(d.getUTCDate() - offsetFromMonday);
+            return d;
+        }
+        case 'month':
+            return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+    }
+}
+
+/** Add N (possibly negative) whole buckets to `date` in UTC. */
+export function addBuckets(date: Date, bucket: BucketUnit, n: number): Date {
+    const d = new Date(date);
+    switch (bucket) {
+        case 'hour':
+            d.setUTCHours(d.getUTCHours() + n);
+            return d;
+        case 'day':
+            d.setUTCDate(d.getUTCDate() + n);
+            return d;
+        case 'week':
+            d.setUTCDate(d.getUTCDate() + n * 7);
+            return d;
+        case 'month':
+            return new Date(
+                Date.UTC(
+                    d.getUTCFullYear(),
+                    d.getUTCMonth() + n,
+                    d.getUTCDate(),
+                    d.getUTCHours(),
+                    d.getUTCMinutes(),
+                    d.getUTCSeconds(),
+                    d.getUTCMilliseconds()
+                )
+            );
+    }
+}
+
+/**
+ * Enumerate every bucket-start in `[from, to)` for the given unit. The first
+ * entry is `truncToBucket(from, bucket)` — i.e. the bucket that contains `from`,
+ * even when `from` itself is mid-bucket.
+ */
+export function enumerateBuckets(
+    from: Date,
+    to: Date,
+    bucket: BucketUnit
+): Date[] {
+    const result: Date[] = [];
+    let cursor = truncToBucket(from, bucket);
+    while (cursor.getTime() < to.getTime()) {
+        result.push(new Date(cursor));
+        cursor = addBuckets(cursor, bucket, 1);
+    }
+    return result;
+}
+
+/**
+ * Fill missing buckets so the response has one row per enumerated bucket-start.
+ * Rows whose `bucket` timestamp lines up with an enumerated start are kept;
+ * gaps are filled via `makeEmpty(bucketStart)`.
+ */
+export function densifyBuckets<R extends { bucket: Date }>(
+    rows: R[],
+    bucketStarts: Date[],
+    makeEmpty: (bucket: Date) => R
+): R[] {
+    const byMs = new Map<number, R>(
+        rows.map(row => [row.bucket.getTime(), row])
+    );
+    return bucketStarts.map(
+        start => byMs.get(start.getTime()) ?? makeEmpty(start)
     );
 }
