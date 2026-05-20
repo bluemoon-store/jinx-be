@@ -23,6 +23,7 @@ import { EthereumProvider } from './blockchain-providers/ethereum-provider.servi
 import { LitecoinProvider } from './blockchain-providers/litecoin-provider.service';
 import { BitcoinCashProvider } from './blockchain-providers/bitcoin-cash-provider.service';
 import { TronProvider } from './blockchain-providers/tron-provider.service';
+import { SolanaProvider } from './blockchain-providers/solana-provider.service';
 import { BlockchainProviderFactory } from './blockchain-providers/blockchain-provider.factory';
 
 // Processors
@@ -75,6 +76,7 @@ import { CryptoPaymentAdminController } from './controllers/crypto-payment.admin
         LitecoinProvider,
         BitcoinCashProvider,
         TronProvider,
+        SolanaProvider,
         // Factory
         BlockchainProviderFactory,
         // Processors + cron schedulers — worker container only

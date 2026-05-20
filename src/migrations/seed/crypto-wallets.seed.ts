@@ -28,6 +28,7 @@ export class CryptoWalletsSeedService {
             CryptoCurrency.USDT_ERC20,
             CryptoCurrency.USDT_TRC20,
             CryptoCurrency.USDC_ERC20,
+            CryptoCurrency.SOL,
         ];
 
         for (const cryptocurrency of cryptocurrencies) {

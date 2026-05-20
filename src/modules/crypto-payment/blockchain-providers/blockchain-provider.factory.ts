@@ -9,6 +9,7 @@ import { EthereumProvider } from './ethereum-provider.service';
 import { LitecoinProvider } from './litecoin-provider.service';
 import { BitcoinCashProvider } from './bitcoin-cash-provider.service';
 import { TronProvider } from './tron-provider.service';
+import { SolanaProvider } from './solana-provider.service';
 
 /**
  * Blockchain Provider Factory
@@ -25,7 +26,8 @@ export class BlockchainProviderFactory {
         private readonly ethereumProvider: EthereumProvider,
         private readonly litecoinProvider: LitecoinProvider,
         private readonly bitcoinCashProvider: BitcoinCashProvider,
-        private readonly tronProvider: TronProvider
+        private readonly tronProvider: TronProvider,
+        private readonly solanaProvider: SolanaProvider
     ) {
         this.providers = new Map();
         this.initializeProviders();
@@ -43,6 +45,7 @@ export class BlockchainProviderFactory {
         this.providers.set(CryptoCurrency.USDT_ERC20, this.ethereumProvider);
         this.providers.set(CryptoCurrency.USDC_ERC20, this.ethereumProvider);
         this.providers.set(CryptoCurrency.USDT_TRC20, this.tronProvider);
+        this.providers.set(CryptoCurrency.SOL, this.solanaProvider);
 
         this.logger.info(
             { supportedCurrencies: Array.from(this.providers.keys()) },

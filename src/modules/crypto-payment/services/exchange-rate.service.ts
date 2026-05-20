@@ -20,6 +20,7 @@ const TATUM_SYMBOL_MAP: Record<CryptoCurrency, string> = {
     USDT_ERC20: 'USDT',
     USDT_TRC20: 'USDT',
     USDC_ERC20: 'USDC',
+    SOL: 'SOL',
 };
 
 /**
@@ -34,6 +35,7 @@ const KRAKEN_SYMBOL_MAP: Record<CryptoCurrency, string> = {
     USDT_ERC20: 'USDTUSD',
     USDT_TRC20: 'USDTUSD',
     USDC_ERC20: 'USDCUSD',
+    SOL: 'SOLUSD',
 };
 
 /**
@@ -278,6 +280,7 @@ export class ExchangeRateService implements IExchangeRateService {
             CryptoCurrency.USDT_ERC20,
             CryptoCurrency.USDT_TRC20,
             CryptoCurrency.USDC_ERC20,
+            CryptoCurrency.SOL,
         ];
 
         // Fetch all rates in parallel

@@ -529,6 +529,7 @@ enum CryptoCurrency {
   USDT_ERC20 // USDT on Ethereum
   USDT_TRC20 // USDT on Tron
   USDC_ERC20 // USDC on Ethereum
+  SOL // Solana (native)
 }
 
 enum PaymentStatus {

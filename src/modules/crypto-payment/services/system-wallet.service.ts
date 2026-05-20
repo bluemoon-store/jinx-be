@@ -64,6 +64,7 @@ export class SystemWalletService implements ISystemWalletService {
             USDT_ERC20: 'eth', // USDT ERC-20 uses ETH mnemonic
             USDT_TRC20: 'trx',
             USDC_ERC20: 'eth', // USDC ERC-20 uses ETH mnemonic
+            SOL: 'sol',
         };
 
         return keyMap[cryptocurrency] || cryptocurrency.toLowerCase();
@@ -333,6 +334,7 @@ export class SystemWalletService implements ISystemWalletService {
             USDT_ERC20: 'eth', // USDT ERC-20 uses ETH platform wallet
             USDT_TRC20: 'trx',
             USDC_ERC20: 'eth', // USDC ERC-20 uses ETH platform wallet
+            SOL: 'sol',
         };
 
         const key = keyMap[cryptocurrency] || cryptocurrency.toLowerCase();

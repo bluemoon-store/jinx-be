@@ -552,6 +552,7 @@ export class CryptoPaymentService implements ICryptoPaymentService {
             USDT_ERC20: 'usdtErc20',
             USDT_TRC20: 'usdtTrc20',
             USDC_ERC20: 'usdcErc20',
+            SOL: 'sol',
         };
 
         const configKey = configMap[cryptocurrency];
@@ -570,6 +571,7 @@ export class CryptoPaymentService implements ICryptoPaymentService {
             USDT_ERC20: 12,
             USDT_TRC20: 19,
             USDC_ERC20: 12,
+            SOL: 32,
         };
 
         return defaults[cryptocurrency] || 3;
@@ -589,6 +591,7 @@ export class CryptoPaymentService implements ICryptoPaymentService {
             USDT_ERC20: 'ERC20',
             USDT_TRC20: 'TRC20',
             USDC_ERC20: 'ERC20',
+            SOL: 'mainnet-beta',
         };
 
         const isTestnet = this.configService.get<boolean>(
@@ -605,6 +608,7 @@ export class CryptoPaymentService implements ICryptoPaymentService {
                 USDT_ERC20: 'ERC20',
                 USDT_TRC20: 'TRC20',
                 USDC_ERC20: 'ERC20',
+                SOL: 'devnet',
             };
             return testnetMap[cryptocurrency] || networkMap[cryptocurrency];
         }

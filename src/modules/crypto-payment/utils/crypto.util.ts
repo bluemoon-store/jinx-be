@@ -4,6 +4,9 @@ import { wordlist as englishWordlist } from '@scure/bip39/wordlists/english.js';
 import * as bitcoin from 'bitcoinjs-lib';
 import { ethers } from 'ethers';
 import { fromHex } from 'tron-format-address';
+import { Keypair, PublicKey } from '@solana/web3.js';
+import bs58 from 'bs58';
+import { derivePath } from 'ed25519-hd-key';
 import { CryptoCurrency } from '@prisma/client';
 
 /**
@@ -18,6 +21,7 @@ const DERIVATION_PATHS: Record<CryptoCurrency, string> = {
     USDT_ERC20: "m/44'/60'/0'/0", // USDT on Ethereum (same as ETH)
     USDT_TRC20: "m/44'/195'/0'/0", // USDT on Tron
     USDC_ERC20: "m/44'/60'/0'/0", // USDC on Ethereum (same as ETH)
+    SOL: "m/44'/501'/0'", // Solana — fully-hardened ed25519 (SLIP-0010); per-index hardened segment is appended in deriveAddress
 };
 
 /**
@@ -121,7 +125,12 @@ export function deriveAddress(
     // Convert mnemonic to seed
     const seed = mnemonicToSeedSync(mnemonic);
 
-    // Create HD key from seed
+    // Solana uses ed25519 (SLIP-0010) — short-circuit before secp256k1 HDKey
+    if (cryptocurrency === CryptoCurrency.SOL) {
+        return deriveSolanaAddress(seed, index);
+    }
+
+    // Create HD key from seed (secp256k1)
     const hdKey = HDKey.fromMasterSeed(seed);
 
     // Get derivation path
@@ -277,6 +286,24 @@ function deriveTronAddress(hdKey: HDKey): DerivedAddress {
 }
 
 /**
+ * Derive Solana address (ed25519, SLIP-0010).
+ * Path: m/44'/501'/0'/{index}' — fully hardened per Phantom/Solflare convention.
+ * Bypasses secp256k1 HDKey; uses ed25519-hd-key against the BIP39 seed.
+ */
+function deriveSolanaAddress(seed: Uint8Array, index: number): DerivedAddress {
+    const seedHex = Buffer.from(seed).toString('hex');
+    const fullPath = `${DERIVATION_PATHS[CryptoCurrency.SOL]}/${index}'`;
+    const { key } = derivePath(fullPath, seedHex);
+    const keypair = Keypair.fromSeed(key);
+
+    return {
+        address: keypair.publicKey.toBase58(),
+        privateKey: bs58.encode(keypair.secretKey),
+        publicKey: keypair.publicKey.toBase58(),
+    };
+}
+
+/**
  * Convert Ethereum address to Tron address format.
  * Tron uses the same secp256k1 key derivation as Ethereum but encodes the 20-byte
  * address with 0x41 prefix and Base58Check (result starts with 'T').
@@ -312,6 +339,10 @@ export function getDerivationPath(
     if (!basePath) {
         throw new Error(`Unsupported cryptocurrency: ${cryptocurrency}`);
     }
+    // Solana requires fully-hardened paths (SLIP-0010 ed25519)
+    if (cryptocurrency === CryptoCurrency.SOL) {
+        return `${basePath}/${index}'`;
+    }
     return `${basePath}/${index}`;
 }
 
@@ -339,6 +370,13 @@ export function isValidAddress(
                 return ethers.isAddress(address);
             case CryptoCurrency.USDT_TRC20:
                 return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
+            case CryptoCurrency.SOL: {
+                // Solana addresses are base58-encoded ed25519 public keys (32 bytes).
+                // PublicKey constructor throws on invalid base58 or wrong length;
+                // additionally check that the key is on the ed25519 curve.
+                const pk = new PublicKey(address);
+                return PublicKey.isOnCurve(pk.toBytes());
+            }
             default:
                 return false;
         }

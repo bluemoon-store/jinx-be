@@ -12,6 +12,7 @@ export default registerAs(
             litecoin: process.env.LITECOIN_RPC_URL || '',
             bitcoinCash: process.env.BITCOIN_CASH_RPC_URL || '',
             tron: process.env.TRON_RPC_URL || '',
+            solana: process.env.SOLANA_RPC_URL || '',
         },
 
         // Tatum API Configuration
@@ -37,6 +38,7 @@ export default registerAs(
             ltc: process.env.SYSTEM_MNEMONIC_LTC || '',
             bch: process.env.SYSTEM_MNEMONIC_BCH || '',
             trx: process.env.SYSTEM_MNEMONIC_TRX || '',
+            sol: process.env.SYSTEM_MNEMONIC_SOL || '',
         },
 
         // Platform Wallet Addresses (where payments are forwarded)
@@ -46,6 +48,7 @@ export default registerAs(
             ltc: process.env.PLATFORM_WALLET_LTC || '',
             bch: process.env.PLATFORM_WALLET_BCH || '',
             trx: process.env.PLATFORM_WALLET_TRX || '',
+            sol: process.env.PLATFORM_WALLET_SOL || '',
         },
 
         // Encryption Configuration
@@ -104,6 +107,7 @@ export default registerAs(
                 process.env.MIN_CONFIRMATIONS_USDC_ERC20 || '12',
                 10
             ),
+            sol: parseInt(process.env.MIN_CONFIRMATIONS_SOL || '32', 10),
         },
 
         // Network Settings
@@ -143,6 +147,15 @@ export default registerAs(
                     process.env.APP_ENV === 'production'
                         ? 'mainnet'
                         : 'shasta',
+            },
+            solana: {
+                mainnet: 'mainnet-beta',
+                testnet: 'devnet',
+                current:
+                    process.env.SOLANA_NETWORK ||
+                    process.env.APP_ENV === 'production'
+                        ? 'mainnet-beta'
+                        : 'devnet',
             },
         },
 
