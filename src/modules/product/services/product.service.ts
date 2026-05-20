@@ -333,6 +333,8 @@ export class ProductService implements IProductService {
                     countryOfOrigin: data.countryOfOrigin,
                     redeemProcess: data.redeemProcess,
                     warrantyText: data.warrantyText,
+                    warrantyMinutes: data.warrantyMinutes ?? 15,
+                    ticketCutoffMinutes: data.ticketCutoffMinutes ?? 20,
                     variants: data.variants?.length
                         ? {
                               create: data.variants.map((v, i) => ({
@@ -763,6 +765,8 @@ export class ProductService implements IProductService {
             assignScalar('countryOfOrigin', rest.countryOfOrigin);
             assignScalar('redeemProcess', rest.redeemProcess);
             assignScalar('warrantyText', rest.warrantyText);
+            assignScalar('warrantyMinutes', rest.warrantyMinutes);
+            assignScalar('ticketCutoffMinutes', rest.ticketCutoffMinutes);
 
             if (slug) {
                 updateData.slug = slug;

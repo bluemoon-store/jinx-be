@@ -321,6 +321,20 @@ export class OrderDeliveryService implements IOrderDeliveryService {
                 );
             }
 
+            const now = new Date();
+            const itemsToStamp = order.items.filter(
+                item => item.deliveredContent && item.firstViewedAt === null
+            );
+            if (itemsToStamp.length > 0) {
+                await this.databaseService.orderItem.updateMany({
+                    where: { id: { in: itemsToStamp.map(i => i.id) } },
+                    data: { firstViewedAt: now },
+                });
+                for (const item of itemsToStamp) {
+                    item.firstViewedAt = now;
+                }
+            }
+
             const deliveryItems = await Promise.all(
                 order.items
                     .filter(item => item.deliveredContent)
@@ -333,6 +347,8 @@ export class OrderDeliveryService implements IOrderDeliveryService {
                         // DeliveryType is always INSTANT; no download links are needed
                         downloadLink: null,
                         deliveredAt: item.deliveredAt!.toISOString(),
+                        firstViewedAt:
+                            item.firstViewedAt?.toISOString() ?? null,
                     }))
             );
 

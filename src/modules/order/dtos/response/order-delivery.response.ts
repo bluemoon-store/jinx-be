@@ -64,6 +64,17 @@ export class OrderItemDeliveryContentDto {
     @Expose()
     @IsString()
     deliveredAt: string;
+
+    @ApiPropertyOptional({
+        example: faker.date.recent().toISOString(),
+        nullable: true,
+        description:
+            'When the buyer first fetched this delivery payload; null until then.',
+    })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    firstViewedAt?: string | null;
 }
 
 export class OrderDeliveryResponseDto {

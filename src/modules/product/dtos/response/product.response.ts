@@ -281,6 +281,24 @@ export class ProductResponseDto implements Product {
     warrantyText: string | null;
 
     @ApiProperty({
+        example: 15,
+        description:
+            'Warranty period in minutes (after delivery) — used by the FE to render a countdown.',
+    })
+    @Expose()
+    @IsInt()
+    warrantyMinutes: number;
+
+    @ApiProperty({
+        example: 20,
+        description:
+            'Cutoff in minutes after delivery past which the buyer cannot open a support ticket.',
+    })
+    @Expose()
+    @IsInt()
+    ticketCutoffMinutes: number;
+
+    @ApiProperty({
         example: faker.date.past().toISOString(),
     })
     @Expose()

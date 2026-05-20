@@ -70,6 +70,26 @@ export class TicketOrderSnapshotDto {
     @Expose()
     @IsString()
     status: string;
+
+    @ApiPropertyOptional({
+        nullable: true,
+        description:
+            'Latest deliveredAt across the order items (warranty clock).',
+    })
+    @Expose()
+    @IsOptional()
+    @IsDate()
+    deliveredAt?: Date | null;
+
+    @ApiPropertyOptional({
+        nullable: true,
+        description:
+            'Earliest non-null firstViewedAt across order items — when the buyer first revealed the delivered content.',
+    })
+    @Expose()
+    @IsOptional()
+    @IsDate()
+    firstViewedAt?: Date | null;
 }
 
 export class TicketResponseDto {
@@ -119,6 +139,14 @@ export class TicketResponseDto {
     @Expose()
     @IsDate()
     createdAt: Date;
+
+    @ApiProperty({
+        example: faker.date.past().toISOString(),
+        description: 'Alias of createdAt — when the ticket was opened.',
+    })
+    @Expose()
+    @IsDate()
+    openedAt: Date;
 
     @ApiProperty({ example: faker.date.recent().toISOString() })
     @Expose()

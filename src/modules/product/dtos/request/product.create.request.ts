@@ -220,6 +220,28 @@ export class ProductCreateDto {
     warrantyText?: string;
 
     @ApiPropertyOptional({
+        example: 15,
+        default: 15,
+        description:
+            'Warranty period (in minutes) shown to the buyer after delivery',
+    })
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    warrantyMinutes?: number;
+
+    @ApiPropertyOptional({
+        example: 20,
+        default: 20,
+        description:
+            'Hard cutoff (in minutes after delivery) past which tickets can no longer be opened',
+    })
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    ticketCutoffMinutes?: number;
+
+    @ApiPropertyOptional({
         type: [ProductImageDto],
         description: 'Product images',
     })

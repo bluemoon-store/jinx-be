@@ -4,6 +4,7 @@ import {
     SupportTicket,
     User,
     Order,
+    OrderItem,
     TicketStatus,
 } from '@prisma/client';
 
@@ -56,13 +57,34 @@ export function mapUserSnapshot(
     };
 }
 
+type OrderItemTimestamps = Pick<OrderItem, 'deliveredAt' | 'firstViewedAt'>;
+
 export function mapOrderSnapshot(
-    order: Pick<Order, 'id' | 'orderNumber' | 'status'>
+    order: Pick<Order, 'id' | 'orderNumber' | 'status'> & {
+        items?: OrderItemTimestamps[];
+    }
 ): TicketOrderSnapshotDto {
+    const items = order.items ?? [];
+    const deliveredDates = items
+        .map(i => i.deliveredAt)
+        .filter((d): d is Date => d !== null);
+    const viewedDates = items
+        .map(i => i.firstViewedAt)
+        .filter((d): d is Date => d !== null);
+
+    const latestDelivered = deliveredDates.length
+        ? deliveredDates.reduce((max, d) => (d > max ? d : max))
+        : null;
+    const earliestViewed = viewedDates.length
+        ? viewedDates.reduce((min, d) => (d < min ? d : min))
+        : null;
+
     return {
         id: order.id,
         orderNumber: order.orderNumber,
         status: order.status,
+        deliveredAt: latestDelivered,
+        firstViewedAt: earliestViewed,
     };
 }
 
@@ -125,7 +147,11 @@ export type TicketListRow = SupportTicket & {
         | 'avatar'
         | 'role'
     > | null;
-    order?: Pick<Order, 'id' | 'orderNumber' | 'status'> | null;
+    order?:
+        | (Pick<Order, 'id' | 'orderNumber' | 'status'> & {
+              items?: OrderItemTimestamps[];
+          })
+        | null;
     messages?: TicketMessage[];
 };
 
@@ -148,6 +174,7 @@ export function mapTicketListItem(
         orderId: row.orderId,
         assignedToId: row.assignedToId,
         createdAt: row.createdAt,
+        openedAt: row.createdAt,
         updatedAt: row.updatedAt,
         closedAt: row.closedAt,
         lastStaffReadAt: row.lastStaffReadAt,
@@ -190,7 +217,11 @@ export function mapTicketDetail(
             | 'avatar'
             | 'role'
         > | null;
-        order?: Pick<Order, 'id' | 'orderNumber' | 'status'> | null;
+        order?:
+            | (Pick<Order, 'id' | 'orderNumber' | 'status'> & {
+                  items?: OrderItemTimestamps[];
+              })
+            | null;
         messages: MessageWithRelations[];
     },
     unreadCount: number
@@ -205,6 +236,7 @@ export function mapTicketDetail(
         orderId: row.orderId,
         assignedToId: row.assignedToId,
         createdAt: row.createdAt,
+        openedAt: row.createdAt,
         updatedAt: row.updatedAt,
         closedAt: row.closedAt,
         lastStaffReadAt: row.lastStaffReadAt,

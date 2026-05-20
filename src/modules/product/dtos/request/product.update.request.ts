@@ -175,6 +175,26 @@ export class ProductUpdateDto {
     warrantyText?: string;
 
     @ApiPropertyOptional({
+        example: 15,
+        description:
+            'Warranty period (in minutes) shown to the buyer after delivery',
+    })
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    warrantyMinutes?: number;
+
+    @ApiPropertyOptional({
+        example: 20,
+        description:
+            'Hard cutoff (in minutes after delivery) past which tickets can no longer be opened',
+    })
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    ticketCutoffMinutes?: number;
+
+    @ApiPropertyOptional({
         type: [ProductVariantUpdateInputDto],
         description: 'Replace/sync variants when provided',
     })

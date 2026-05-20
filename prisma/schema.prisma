@@ -162,6 +162,8 @@ model Product {
   countryOfOrigin String?   @map("country_of_origin")
   redeemProcess   String?   @map("redeem_process") @db.Text
   warrantyText    String?   @map("warranty_text") @db.Text
+  warrantyMinutes     Int       @default(15) @map("warranty_minutes")
+  ticketCutoffMinutes Int       @default(20) @map("ticket_cutoff_minutes")
 
   variants    ProductVariant[]
   drops       Drop[]
@@ -451,6 +453,7 @@ model OrderItem {
   priceAtPurchase  Decimal   @map("price_at_purchase") @db.Decimal(20, 8)
   deliveredContent String?   @map("delivered_content") @db.Text // Actual content delivered
   deliveredAt      DateTime? @map("delivered_at")
+  firstViewedAt    DateTime? @map("first_viewed_at")
 
   variantId     String?         @map("variant_id")
   variant       ProductVariant? @relation(fields: [variantId], references: [id])

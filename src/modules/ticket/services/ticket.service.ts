@@ -55,10 +55,48 @@ export class TicketService implements ITicketService {
     ): Promise<TicketDetailResponseDto> {
         const order = await this.databaseService.order.findFirst({
             where: { orderNumber: data.orderNumber, deletedAt: null },
+            include: {
+                items: {
+                    select: {
+                        deliveredAt: true,
+                        product: {
+                            select: { ticketCutoffMinutes: true },
+                        },
+                    },
+                },
+            },
         });
         if (!order || order.userId !== userId) {
             throw new HttpException(
                 'ticket.error.orderMismatch',
+                HttpStatus.BAD_REQUEST
+            );
+        }
+
+        const deliveredAts = order.items
+            .map(i => i.deliveredAt)
+            .filter((d): d is Date => d !== null);
+        if (deliveredAts.length === 0) {
+            throw new HttpException(
+                'ticket.error.orderNotDelivered',
+                HttpStatus.BAD_REQUEST
+            );
+        }
+        const latestDeliveredAt = deliveredAts.reduce(
+            (max, d) => (d > max ? d : max),
+            deliveredAts[0]
+        );
+        const cutoffMinutes = order.items.reduce<number>(
+            (min, i) => Math.min(min, i.product.ticketCutoffMinutes),
+            Number.POSITIVE_INFINITY
+        );
+        const effectiveCutoff = Number.isFinite(cutoffMinutes)
+            ? cutoffMinutes
+            : 20;
+        const elapsedMs = Date.now() - latestDeliveredAt.getTime();
+        if (elapsedMs > effectiveCutoff * 60 * 1000) {
+            throw new HttpException(
+                'ticket.error.warrantyExpired',
                 HttpStatus.BAD_REQUEST
             );
         }
@@ -110,6 +148,12 @@ export class TicketService implements ITicketService {
                             id: true,
                             orderNumber: true,
                             status: true,
+                            items: {
+                                select: {
+                                    deliveredAt: true,
+                                    firstViewedAt: true,
+                                },
+                            },
                         },
                     },
                     messages: {
@@ -205,6 +249,12 @@ export class TicketService implements ITicketService {
                             id: true,
                             orderNumber: true,
                             status: true,
+                            items: {
+                                select: {
+                                    deliveredAt: true,
+                                    firstViewedAt: true,
+                                },
+                            },
                         },
                     },
                     messages: {
@@ -330,6 +380,12 @@ export class TicketService implements ITicketService {
                             id: true,
                             orderNumber: true,
                             status: true,
+                            items: {
+                                select: {
+                                    deliveredAt: true,
+                                    firstViewedAt: true,
+                                },
+                            },
                         },
                     },
                     messages: {
@@ -404,6 +460,12 @@ export class TicketService implements ITicketService {
                         id: true,
                         orderNumber: true,
                         status: true,
+                        items: {
+                            select: {
+                                deliveredAt: true,
+                                firstViewedAt: true,
+                            },
+                        },
                     },
                 },
             },
@@ -536,6 +598,12 @@ export class TicketService implements ITicketService {
                         id: true,
                         orderNumber: true,
                         status: true,
+                        items: {
+                            select: {
+                                deliveredAt: true,
+                                firstViewedAt: true,
+                            },
+                        },
                     },
                 },
                 messages: {
@@ -659,6 +727,12 @@ export class TicketService implements ITicketService {
                         id: true,
                         orderNumber: true,
                         status: true,
+                        items: {
+                            select: {
+                                deliveredAt: true,
+                                firstViewedAt: true,
+                            },
+                        },
                     },
                 },
                 messages: {
@@ -774,6 +848,12 @@ export class TicketService implements ITicketService {
                         id: true,
                         orderNumber: true,
                         status: true,
+                        items: {
+                            select: {
+                                deliveredAt: true,
+                                firstViewedAt: true,
+                            },
+                        },
                     },
                 },
                 messages: {
