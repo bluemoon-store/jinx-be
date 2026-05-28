@@ -163,7 +163,6 @@ model Product {
   redeemProcess   String?   @map("redeem_process") @db.Text
   warrantyText    String?   @map("warranty_text") @db.Text
   warrantyMinutes     Int       @default(15) @map("warranty_minutes")
-  ticketCutoffMinutes Int       @default(20) @map("ticket_cutoff_minutes")
 
   variants    ProductVariant[]
   drops       Drop[]

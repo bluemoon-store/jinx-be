@@ -290,15 +290,6 @@ export class ProductResponseDto implements Product {
     warrantyMinutes: number;
 
     @ApiProperty({
-        example: 20,
-        description:
-            'Cutoff in minutes after delivery past which the buyer cannot open a support ticket.',
-    })
-    @Expose()
-    @IsInt()
-    ticketCutoffMinutes: number;
-
-    @ApiProperty({
         example: faker.date.past().toISOString(),
     })
     @Expose()

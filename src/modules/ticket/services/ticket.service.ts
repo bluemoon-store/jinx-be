@@ -60,7 +60,7 @@ export class TicketService implements ITicketService {
                     select: {
                         deliveredAt: true,
                         product: {
-                            select: { ticketCutoffMinutes: true },
+                            select: { warrantyMinutes: true },
                         },
                     },
                 },
@@ -87,16 +87,16 @@ export class TicketService implements ITicketService {
             deliveredAts[0]
         );
         const cutoffMinutes = order.items.reduce<number>(
-            (min, i) => Math.min(min, i.product.ticketCutoffMinutes),
+            (min, i) => Math.min(min, i.product.warrantyMinutes),
             Number.POSITIVE_INFINITY
         );
         const effectiveCutoff = Number.isFinite(cutoffMinutes)
             ? cutoffMinutes
-            : 20;
+            : 15;
         const elapsedMs = Date.now() - latestDeliveredAt.getTime();
         if (elapsedMs > effectiveCutoff * 60 * 1000) {
             throw new HttpException(
-                'ticket.error.warrantyExpired',
+                'Your product is out of warranty.',
                 HttpStatus.BAD_REQUEST
             );
         }

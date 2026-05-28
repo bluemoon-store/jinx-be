@@ -231,17 +231,6 @@ export class ProductCreateDto {
     warrantyMinutes?: number;
 
     @ApiPropertyOptional({
-        example: 20,
-        default: 20,
-        description:
-            'Hard cutoff (in minutes after delivery) past which tickets can no longer be opened',
-    })
-    @IsOptional()
-    @IsInt()
-    @Min(0)
-    ticketCutoffMinutes?: number;
-
-    @ApiPropertyOptional({
         type: [ProductImageDto],
         description: 'Product images',
     })
