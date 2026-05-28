@@ -87,4 +87,13 @@ export class CategoryResponseDto implements ProductCategory {
     @IsOptional()
     @IsDate()
     deletedAt: Date | null;
+
+    @ApiPropertyOptional({
+        example: 12,
+        description: 'Number of non-deleted products in this category',
+    })
+    @Expose()
+    @IsOptional()
+    @IsInt()
+    productCount?: number;
 }

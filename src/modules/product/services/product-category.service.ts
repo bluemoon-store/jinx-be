@@ -111,23 +111,41 @@ export class ProductCategoryService implements IProductCategoryService {
                 where.isActive = options.isActive;
             }
 
-            const result =
-                await this.paginationService.paginate<CategoryResponseDto>(
-                    this.databaseService.productCategory,
-                    {
-                        page: options?.page ?? 1,
-                        limit: options?.limit ?? 10,
+            const result = await this.paginationService.paginate<
+                CategoryResponseDto & {
+                    _count?: { products: number };
+                }
+            >(
+                this.databaseService.productCategory,
+                {
+                    page: options?.page ?? 1,
+                    limit: options?.limit ?? 10,
+                },
+                {
+                    where,
+                    orderBy: [
+                        { sortOrder: 'asc' as const },
+                        { createdAt: 'desc' as const },
+                    ],
+                    include: {
+                        _count: {
+                            select: {
+                                products: {
+                                    where: { deletedAt: null },
+                                },
+                            },
+                        },
                     },
-                    {
-                        where,
-                        orderBy: [
-                            { sortOrder: 'asc' as const },
-                            { createdAt: 'desc' as const },
-                        ],
-                    }
-                );
+                }
+            );
 
-            return result;
+            return {
+                metadata: result.metadata,
+                items: result.items.map(({ _count, ...rest }) => ({
+                    ...rest,
+                    productCount: _count?.products ?? 0,
+                })),
+            };
         } catch (error) {
             this.logger.error(`Failed to list categories: ${error.message}`);
             throw new HttpException(
@@ -145,6 +163,15 @@ export class ProductCategoryService implements IProductCategoryService {
                         id,
                         deletedAt: null,
                     },
+                    include: {
+                        _count: {
+                            select: {
+                                products: {
+                                    where: { deletedAt: null },
+                                },
+                            },
+                        },
+                    },
                 });
 
             if (!category) {
@@ -154,7 +181,8 @@ export class ProductCategoryService implements IProductCategoryService {
                 );
             }
 
-            return category;
+            const { _count, ...rest } = category;
+            return { ...rest, productCount: _count?.products ?? 0 };
         } catch (error) {
             if (error instanceof HttpException) {
                 throw error;
@@ -175,6 +203,15 @@ export class ProductCategoryService implements IProductCategoryService {
                         slug,
                         deletedAt: null,
                     },
+                    include: {
+                        _count: {
+                            select: {
+                                products: {
+                                    where: { deletedAt: null },
+                                },
+                            },
+                        },
+                    },
                 });
 
             if (!category) {
@@ -184,7 +221,8 @@ export class ProductCategoryService implements IProductCategoryService {
                 );
             }
 
-            return category;
+            const { _count, ...rest } = category;
+            return { ...rest, productCount: _count?.products ?? 0 };
         } catch (error) {
             if (error instanceof HttpException) {
                 throw error;
@@ -257,11 +295,13 @@ export class ProductCategoryService implements IProductCategoryService {
         }
     }
 
-    async delete(id: string): Promise<ApiGenericResponseDto> {
+    async delete(
+        id: string,
+        reassignToCategoryId?: string
+    ): Promise<ApiGenericResponseDto> {
         try {
             await this.findOne(id);
 
-            // Check if category has products
             const productCount = await this.databaseService.product.count({
                 where: {
                     categoryId: id,
@@ -270,21 +310,44 @@ export class ProductCategoryService implements IProductCategoryService {
             });
 
             if (productCount > 0) {
-                throw new HttpException(
-                    'product.error.categoryHasProducts',
-                    HttpStatus.BAD_REQUEST
-                );
+                if (!reassignToCategoryId) {
+                    throw new HttpException(
+                        'product.error.reassignTargetRequired',
+                        HttpStatus.BAD_REQUEST
+                    );
+                }
+                if (reassignToCategoryId === id) {
+                    throw new HttpException(
+                        'product.error.reassignTargetSameAsSource',
+                        HttpStatus.BAD_REQUEST
+                    );
+                }
+                // Throws categoryNotFound (404) if missing or soft-deleted
+                await this.findOne(reassignToCategoryId);
             }
 
-            // Soft delete
-            await this.databaseService.productCategory.update({
-                where: { id },
-                data: {
-                    deletedAt: new Date(),
-                },
+            let movedCount = 0;
+            await this.databaseService.$transaction(async tx => {
+                if (productCount > 0 && reassignToCategoryId) {
+                    const updateResult = await tx.product.updateMany({
+                        where: {
+                            categoryId: id,
+                            deletedAt: null,
+                        },
+                        data: { categoryId: reassignToCategoryId },
+                    });
+                    movedCount = updateResult.count;
+                }
+                await tx.productCategory.update({
+                    where: { id },
+                    data: { deletedAt: new Date() },
+                });
             });
 
-            this.logger.info({ categoryId: id }, 'Category deleted');
+            this.logger.info(
+                { categoryId: id, reassignToCategoryId, movedCount },
+                'Category deleted'
+            );
             return {
                 success: true,
                 message: 'product.success.categoryDeleted',

@@ -15,6 +15,9 @@ export interface IProductCategoryService {
     findOne(id: string): Promise<CategoryResponseDto>;
     findBySlug(slug: string): Promise<CategoryResponseDto>;
     update(id: string, data: CategoryUpdateDto): Promise<CategoryResponseDto>;
-    delete(id: string): Promise<ApiGenericResponseDto>;
+    delete(
+        id: string,
+        reassignToCategoryId?: string
+    ): Promise<ApiGenericResponseDto>;
     toggleActive(id: string): Promise<CategoryResponseDto>;
 }

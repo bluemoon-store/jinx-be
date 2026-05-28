@@ -10,7 +10,12 @@ import {
     Put,
     Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+    ApiBearerAuth,
+    ApiOperation,
+    ApiQuery,
+    ApiTags,
+} from '@nestjs/swagger';
 import { ActivityLogCategory } from '@prisma/client';
 import { ApiPaginatedDataDto } from 'src/common/response/dtos/response.paginated.dto';
 import { DocResponse } from 'src/common/doc/decorators/doc.response.decorator';
@@ -209,14 +214,22 @@ export class ProductAdminController {
     @AllowedRoles(STAFF_OPERATIONS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Delete category' })
+    @ApiQuery({
+        name: 'reassignToCategoryId',
+        required: false,
+        type: String,
+        description:
+            'Destination category id to move products into before deleting. Required when the category has products.',
+    })
     @DocGenericResponse({
         httpStatus: HttpStatus.OK,
         messageKey: 'product.success.categoryDeleted',
     })
     public async deleteCategory(
-        @Param('id') id: string
+        @Param('id') id: string,
+        @Query('reassignToCategoryId') reassignToCategoryId?: string
     ): Promise<ApiGenericResponseDto> {
-        return this.categoryService.delete(id);
+        return this.categoryService.delete(id, reassignToCategoryId);
     }
 
     @Put('categories/:id/toggle-active')
