@@ -11,6 +11,7 @@ import { CartModule } from 'src/modules/cart/cart.module';
 import { CouponModule } from 'src/modules/coupon/coupon.module';
 import { ActivityLogModule } from 'src/modules/activity-log/activity-log.module';
 import { StockLineModule } from 'src/modules/stock-line/stock-line.module';
+import { TicketModule } from 'src/modules/ticket/ticket.module';
 
 import { OrderPublicController } from './controllers/order.public.controller';
 import { OrderAdminController } from './controllers/order.admin.controller';
@@ -28,6 +29,7 @@ import { OrderDeliveryService } from './services/order-delivery.service';
         RequestModule,
         ActivityLogModule,
         StockLineModule,
+        TicketModule,
         BullModule.registerQueue({
             name: APP_BULL_QUEUES.EMAIL,
         }),

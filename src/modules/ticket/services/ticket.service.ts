@@ -771,6 +771,54 @@ export class TicketService implements ITicketService {
         return dto;
     }
 
+    /**
+     * Idempotently move a ticket to RESOLVED when it is still active.
+     * No-ops when already RESOLVED / CLOSED / CANCELLED. Safe to call
+     * from service-to-service flows (order replacement / credit) where
+     * the caller has already authorized the action.
+     */
+    async resolveIfActive(
+        ticketId: string,
+        tx?: Prisma.TransactionClient
+    ): Promise<void> {
+        const client = tx ?? this.databaseService;
+        const ticket = await client.supportTicket.findFirst({
+            where: { id: ticketId, deletedAt: null },
+            select: { id: true, status: true },
+        });
+        if (!ticket) {
+            throw new HttpException(
+                'ticket.error.ticketNotFound',
+                HttpStatus.NOT_FOUND
+            );
+        }
+        if (
+            ticket.status === TicketStatus.RESOLVED ||
+            ticket.status === TicketStatus.CLOSED ||
+            ticket.status === TicketStatus.CANCELLED
+        ) {
+            return;
+        }
+
+        await client.supportTicket.update({
+            where: { id: ticketId },
+            data: {
+                status: TicketStatus.RESOLVED,
+                closedAt: new Date(),
+            },
+        });
+
+        // Broadcast updated list item best-effort outside the caller's tx.
+        // When called inside a transaction we skip the broadcast — the
+        // caller can trigger a refresh on its own success path.
+        if (!tx) {
+            const listDto = await this.fetchTicketListItemDto(ticketId);
+            if (listDto) {
+                this.ticketGateway.emitTicketUpdated(ticketId, listDto);
+            }
+        }
+    }
+
     async presignAttachment(
         actor: { userId: string; role: Role },
         ticketId: string,

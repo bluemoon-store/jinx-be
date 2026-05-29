@@ -22,9 +22,13 @@ import { DocResponse } from 'src/common/doc/decorators/doc.response.decorator';
 import { DocPaginatedResponse } from 'src/common/doc/decorators/doc.paginated.decorator';
 import { DocGenericResponse } from 'src/common/doc/decorators/doc.generic.decorator';
 import { AllowedRoles } from 'src/common/request/decorators/request.role.decorator';
+import { AuthUser } from 'src/common/request/decorators/request.user.decorator';
+import { IAuthUser } from 'src/common/request/interfaces/request.interface';
 import { QueryTransformPipe } from 'src/common/request/pipes/query-transform.pipe';
 import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic.dto';
 
+import { OrderIssueCreditDto } from '../dtos/request/order.issue-credit.request';
+import { OrderIssueReplacementDto } from '../dtos/request/order.issue-replacement.request';
 import { OrderStatusUpdateDto } from '../dtos/request/order.status-update.request';
 import { OrderListQueryDto } from '../dtos/request/order-list.request';
 import { OrderDeliverDto } from '../dtos/request/order.deliver.request';
@@ -145,5 +149,59 @@ export class OrderAdminController {
         @Param('id') orderId: string
     ): Promise<ApiGenericResponseDto> {
         return this.orderService.refundOrder(orderId);
+    }
+
+    @Post(':id/issue-replacement')
+    @AuditLog({
+        action: 'order.issueReplacement',
+        category: ActivityLogCategory.ORDER,
+        resourceType: 'Order',
+        resourceIdParam: 'id',
+        severity: ActivityLogSeverity.WARNING,
+    })
+    @AllowedRoles(SUPPORT_HANDLING_ROLES)
+    @ApiBearerAuth('accessToken')
+    @ApiOperation({
+        summary: 'Issue replacement gift-card content for selected order items',
+    })
+    @DocGenericResponse({
+        httpStatus: HttpStatus.OK,
+        messageKey: 'order.success.replacementIssued',
+    })
+    public async issueReplacement(
+        @AuthUser() user: IAuthUser,
+        @Param('id') orderId: string,
+        @Body() payload: OrderIssueReplacementDto
+    ): Promise<ApiGenericResponseDto> {
+        return this.orderService.issueReplacement(
+            orderId,
+            user.userId,
+            payload
+        );
+    }
+
+    @Post(':id/issue-credit')
+    @AuditLog({
+        action: 'order.issueCredit',
+        category: ActivityLogCategory.ORDER,
+        resourceType: 'Order',
+        resourceIdParam: 'id',
+        severity: ActivityLogSeverity.WARNING,
+    })
+    @AllowedRoles(SUPPORT_HANDLING_ROLES)
+    @ApiBearerAuth('accessToken')
+    @ApiOperation({
+        summary: 'Issue partial store credit to the customer wallet',
+    })
+    @DocGenericResponse({
+        httpStatus: HttpStatus.OK,
+        messageKey: 'order.success.creditIssued',
+    })
+    public async issueCredit(
+        @AuthUser() user: IAuthUser,
+        @Param('id') orderId: string,
+        @Body() payload: OrderIssueCreditDto
+    ): Promise<ApiGenericResponseDto> {
+        return this.orderService.issueCredit(orderId, user.userId, payload);
     }
 }

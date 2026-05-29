@@ -3,7 +3,7 @@ import { HttpStatus, Injectable, HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
 import { PinoLogger } from 'nestjs-pino';
-import { OrderStatus, Prisma } from '@prisma/client';
+import { OrderStatus, Prisma, StockLineStatus } from '@prisma/client';
 
 import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { DatabaseService } from 'src/common/database/services/database.service';
@@ -17,8 +17,12 @@ import { ApiPaginatedDataDto } from 'src/common/response/dtos/response.paginated
 import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic.dto';
 import { WalletService } from 'src/modules/wallet/services/wallet.service';
 import { ActivityLogEmitterService } from 'src/modules/activity-log/services/activity-log.emitter.service';
+import { TicketMessageService } from 'src/modules/ticket/services/ticket-message.service';
+import { TicketService } from 'src/modules/ticket/services/ticket.service';
 
 import { OrderCreateDto } from '../dtos/request/order.create.request';
+import { OrderIssueCreditDto } from '../dtos/request/order.issue-credit.request';
+import { OrderIssueReplacementDto } from '../dtos/request/order.issue-replacement.request';
 import { OrderStatusUpdateDto } from '../dtos/request/order.status-update.request';
 import {
     OrderResponseDto,
@@ -50,6 +54,8 @@ export class OrderService implements IOrderService {
         private readonly activityLogEmitter: ActivityLogEmitterService,
         private readonly stockLineService: StockLineService,
         private readonly configService: ConfigService,
+        private readonly ticketService: TicketService,
+        private readonly ticketMessageService: TicketMessageService,
         @InjectQueue(APP_BULL_QUEUES.EMAIL)
         private readonly emailQueue: Queue,
         private readonly logger: PinoLogger
@@ -909,6 +915,258 @@ export class OrderService implements IOrderService {
             this.logger.error(`Failed to refund order: ${error.message}`);
             throw new HttpException(
                 'order.error.refundFailed',
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    /**
+     * Issue replacement gift-card content for selected order items.
+     *
+     * For each chosen order item: retire its currently-SOLD stock lines
+     * (StockLineStatus.REFUNDED), allocate fresh AVAILABLE lines for the
+     * same variant, mark them SOLD, and refresh the item's deliveredContent.
+     * If a ticketId is supplied, post a staff system message describing
+     * the replacement and move the ticket to RESOLVED.
+     */
+    async issueReplacement(
+        orderId: string,
+        adminUserId: string,
+        payload: OrderIssueReplacementDto
+    ): Promise<ApiGenericResponseDto> {
+        try {
+            const order = await this.databaseService.order.findFirst({
+                where: { id: orderId, deletedAt: null },
+                include: {
+                    items: {
+                        select: {
+                            id: true,
+                            variantId: true,
+                            quantity: true,
+                        },
+                    },
+                },
+            });
+
+            if (!order) {
+                throw new HttpException(
+                    'order.error.orderNotFound',
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            if (order.status !== OrderStatus.COMPLETED) {
+                throw new HttpException(
+                    'order.error.invalidOrderStatusForReplacement',
+                    HttpStatus.BAD_REQUEST
+                );
+            }
+
+            const requested = new Set(payload.orderItemIds);
+            const matched = order.items.filter(i => requested.has(i.id));
+            if (matched.length !== requested.size) {
+                throw new HttpException(
+                    'order.error.orderItemNotFound',
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            for (const item of matched) {
+                if (!item.variantId) {
+                    throw new HttpException(
+                        'order.error.replacementVariantRequired',
+                        HttpStatus.BAD_REQUEST
+                    );
+                }
+            }
+
+            const farFuture = new Date(Date.now() + 60 * 60 * 1000);
+            const now = new Date();
+
+            try {
+                await this.databaseService.$transaction(async tx => {
+                    for (const item of matched) {
+                        await this.stockLineService.retireForOrderItem(
+                            tx,
+                            item.id
+                        );
+
+                        await this.stockLineService.allocateForOrderItem(
+                            tx,
+                            item.id,
+                            item.variantId!,
+                            item.quantity,
+                            farFuture
+                        );
+
+                        await this.stockLineService.markSold(tx, item.id);
+
+                        const fresh = await tx.productStockLine.findMany({
+                            where: {
+                                orderItemId: item.id,
+                                status: StockLineStatus.SOLD,
+                            },
+                            orderBy: { soldAt: 'desc' },
+                            take: item.quantity,
+                            select: { content: true },
+                        });
+
+                        if (fresh.length > 0) {
+                            await tx.orderItem.update({
+                                where: { id: item.id },
+                                data: {
+                                    deliveredContent: fresh
+                                        .map(l => l.content)
+                                        .join('\n'),
+                                    deliveredAt: now,
+                                    firstViewedAt: null,
+                                },
+                            });
+                        }
+                    }
+
+                    if (payload.ticketId) {
+                        const summary = `Replacement issued for ${matched.length} item(s). Previous codes have been retired.`;
+                        const body = payload.note
+                            ? `${summary}\n\nNote: ${payload.note}`
+                            : summary;
+                        await this.ticketMessageService.createSystemMessage(
+                            payload.ticketId,
+                            adminUserId,
+                            body,
+                            tx
+                        );
+                        await this.ticketService.resolveIfActive(
+                            payload.ticketId,
+                            tx
+                        );
+                    }
+                });
+            } catch (error) {
+                if (
+                    error instanceof HttpException &&
+                    error.message === 'order.error.insufficientStock'
+                ) {
+                    throw new HttpException(
+                        'order.error.replacementOutOfStock',
+                        HttpStatus.BAD_REQUEST
+                    );
+                }
+                throw error;
+            }
+
+            this.logger.info(
+                {
+                    orderId,
+                    adminUserId,
+                    orderItemIds: payload.orderItemIds,
+                    ticketId: payload.ticketId,
+                },
+                'Replacement issued'
+            );
+
+            return {
+                success: true,
+                message: 'order.success.replacementIssued',
+            };
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            this.logger.error(`Failed to issue replacement: ${error.message}`);
+            throw new HttpException(
+                'order.error.replacementFailed',
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    /**
+     * Credit a custom USD amount to the order's customer wallet.
+     *
+     * Does NOT flip the order to REFUNDED — this is partial goodwill credit.
+     * For full-order refund use {@link refundOrder}. If a ticketId is supplied,
+     * post a staff system message and move the ticket to RESOLVED.
+     */
+    async issueCredit(
+        orderId: string,
+        adminUserId: string,
+        payload: OrderIssueCreditDto
+    ): Promise<ApiGenericResponseDto> {
+        try {
+            const order = await this.databaseService.order.findFirst({
+                where: { id: orderId, deletedAt: null },
+                select: {
+                    id: true,
+                    userId: true,
+                    orderNumber: true,
+                    totalAmount: true,
+                },
+            });
+
+            if (!order) {
+                throw new HttpException(
+                    'order.error.orderNotFound',
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
+            const orderTotal =
+                typeof order.totalAmount === 'string'
+                    ? parseFloat(order.totalAmount)
+                    : Number(order.totalAmount);
+            if (
+                Number.isFinite(orderTotal) &&
+                payload.amount > orderTotal + 1e-6
+            ) {
+                throw new HttpException(
+                    'order.error.creditExceedsOrderTotal',
+                    HttpStatus.BAD_REQUEST
+                );
+            }
+
+            await this.walletService.refundBalance(
+                order.userId,
+                payload.amount,
+                `Store credit for ${order.orderNumber}: ${payload.reason}`,
+                order.id
+            );
+
+            if (payload.ticketId) {
+                const formatted = payload.amount.toLocaleString('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                });
+                const body = `Issued ${formatted} store credit. Reason: ${payload.reason}`;
+                await this.ticketMessageService.createSystemMessage(
+                    payload.ticketId,
+                    adminUserId,
+                    body
+                );
+                await this.ticketService.resolveIfActive(payload.ticketId);
+            }
+
+            this.logger.info(
+                {
+                    orderId,
+                    adminUserId,
+                    amount: payload.amount,
+                    ticketId: payload.ticketId,
+                },
+                'Store credit issued'
+            );
+
+            return {
+                success: true,
+                message: 'order.success.creditIssued',
+            };
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            this.logger.error(`Failed to issue credit: ${error.message}`);
+            throw new HttpException(
+                'order.error.creditFailed',
                 HttpStatus.INTERNAL_SERVER_ERROR
             );
         }

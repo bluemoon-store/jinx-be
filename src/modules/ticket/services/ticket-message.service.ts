@@ -4,7 +4,7 @@ import {
     HttpStatus,
     Injectable,
 } from '@nestjs/common';
-import { Role, TicketStatus } from '@prisma/client';
+import { Prisma, Role, TicketStatus } from '@prisma/client';
 
 import { DatabaseService } from 'src/common/database/services/database.service';
 import {
@@ -248,6 +248,61 @@ export class TicketMessageService implements ITicketMessageService {
         );
 
         return dto;
+    }
+
+    /**
+     * Append a staff-side system message to a ticket without enforcing
+     * assignment/ownership rules. Intended for service-to-service calls
+     * (e.g. order replacement / credit flows) where the caller already
+     * authorized the action via its own controller guard.
+     */
+    async createSystemMessage(
+        ticketId: string,
+        adminUserId: string,
+        message: string,
+        tx?: Prisma.TransactionClient
+    ): Promise<void> {
+        const client = tx ?? this.databaseService;
+        const ticket = await client.supportTicket.findFirst({
+            where: { id: ticketId, deletedAt: null },
+            select: { id: true },
+        });
+        if (!ticket) {
+            throw new HttpException(
+                'ticket.error.ticketNotFound',
+                HttpStatus.NOT_FOUND
+            );
+        }
+
+        const created = await client.ticketMessage.create({
+            data: {
+                ticketId,
+                userId: adminUserId,
+                message,
+                isStaff: true,
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        userName: true,
+                        firstName: true,
+                        lastName: true,
+                        avatar: true,
+                        role: true,
+                        email: true,
+                    },
+                },
+                attachments: true,
+            },
+        });
+
+        // Best-effort realtime broadcast; we don't wait or fail the action.
+        try {
+            this.ticketGateway.emitNewMessage(ticketId, mapMessage(created));
+        } catch {
+            // gateway errors should not break the order flow
+        }
     }
 
     async listMessages(
