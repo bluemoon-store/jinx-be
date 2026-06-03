@@ -461,13 +461,14 @@ export class ProductAdminController {
         @Body() payload: AdminProductImageCreateDto
     ): Promise<ProductResponseDto> {
         const imageKey = payload.key ?? payload.imageKey;
-        if (!imageKey) {
-            throw new BadRequestException('imageKey or key is required');
+        if (!imageKey && !payload.url) {
+            throw new BadRequestException('imageKey, key, or url is required');
         }
         return this.productService.addImage(
             productId,
             imageKey,
-            payload.isPrimary ?? false
+            payload.isPrimary ?? false,
+            payload.url
         );
     }
 

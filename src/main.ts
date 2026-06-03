@@ -27,6 +27,9 @@ async function bootstrapApi(): Promise<void> {
     try {
         app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
             bufferLogs: true,
+            // Capture the raw request body so payment webhooks can verify
+            // HMAC signatures (see FiatPaymentWebhookController).
+            rawBody: true,
         });
 
         const config = app.get(ConfigService);
@@ -42,6 +45,7 @@ async function bootstrapApi(): Promise<void> {
         const queues = [
             app.get(getQueueToken('crypto-payment-verification')),
             app.get(getQueueToken('crypto-payment-forwarding')),
+            app.get(getQueueToken('fiat-payment')),
             app.get(getQueueToken(APP_BULL_QUEUES.EMAIL)),
             app.get(getQueueToken(APP_BULL_QUEUES.NOTIFICATION)),
             app.get(getQueueToken(APP_BULL_QUEUES.ACTIVITY_LOG)),

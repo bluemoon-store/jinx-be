@@ -89,9 +89,18 @@ export class AdminProductImageCreateDto {
         example: 'products/images/product-123.jpg',
         description: 'Legacy image key field for backward compatibility',
     })
-    @ValidateIf(o => o.key === undefined)
+    @ValidateIf(o => o.key === undefined && o.url === undefined)
     @IsString()
     imageKey?: string;
+
+    @ApiPropertyOptional({
+        example: 'https://example.com/images/product-123.jpg',
+        description:
+            'External image URL. When provided, the image is stored as-is instead of from a storage key.',
+    })
+    @IsOptional()
+    @IsString()
+    url?: string;
 
     @ApiPropertyOptional({
         example: false,

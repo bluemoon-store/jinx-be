@@ -1,0 +1,43 @@
+import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
+import { ConfigModule } from '@nestjs/config';
+
+import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
+import { CommonModule } from 'src/common/common.module';
+import { RequestModule } from 'src/common/request/request.module';
+import { CustomLoggerModule } from 'src/common/logger/logger.module';
+import { workerOnlyProviders } from 'src/common/utils/role.util';
+import { OrderModule } from 'src/modules/order/order.module';
+import { StockLineModule } from 'src/modules/stock-line/stock-line.module';
+
+import { FIAT_PAYMENT_QUEUE } from './fiat-payment.constants';
+import { ChimeGateway } from './gateways/chime-gateway.service';
+import { PaymentGatewayFactory } from './gateways/payment-gateway.factory';
+import { FiatPaymentService } from './services/fiat-payment.service';
+import { FiatPaymentProcessor } from './processors/fiat-payment.processor';
+import { FiatPaymentScheduler } from './schedulers/fiat-payment.scheduler';
+import { FiatPaymentPublicController } from './controllers/fiat-payment.public.controller';
+import { FiatPaymentWebhookController } from './controllers/fiat-payment.webhook.controller';
+
+@Module({
+    imports: [
+        ConfigModule,
+        CommonModule, // DatabaseService, CacheManager
+        RequestModule,
+        CustomLoggerModule, // PinoLogger
+        OrderModule, // OrderDeliveryService
+        StockLineModule, // StockLineService
+        BullModule.registerQueue({ name: FIAT_PAYMENT_QUEUE }),
+        BullModule.registerQueue({ name: APP_BULL_QUEUES.EMAIL }),
+    ],
+    controllers: [FiatPaymentPublicController, FiatPaymentWebhookController],
+    providers: [
+        FiatPaymentService,
+        PaymentGatewayFactory,
+        ChimeGateway,
+        // Processor + cron scheduler — worker container only
+        ...workerOnlyProviders([FiatPaymentProcessor, FiatPaymentScheduler]),
+    ],
+    exports: [FiatPaymentService],
+})
+export class FiatPaymentModule {}

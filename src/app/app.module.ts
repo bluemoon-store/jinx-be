@@ -23,6 +23,7 @@ import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
 
 import { HealthController } from './controllers/health.controller';
 import { CryptoPaymentModule } from 'src/modules/crypto-payment/crypto-payment.module';
+import { FiatPaymentModule } from 'src/modules/fiat-payment/fiat-payment.module';
 @Module({
     imports: [
         // Shared Common Services
@@ -44,6 +45,7 @@ import { CryptoPaymentModule } from 'src/modules/crypto-payment/crypto-payment.m
         OrderModule,
         TicketModule,
         CryptoPaymentModule,
+        FiatPaymentModule,
         ReviewModule,
         VouchModule,
         CouponModule,

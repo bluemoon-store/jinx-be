@@ -948,8 +948,9 @@ export class ProductService implements IProductService {
 
     async addImage(
         productId: string,
-        imageKey: string,
-        isPrimary: boolean = false
+        imageKey?: string,
+        isPrimary: boolean = false,
+        externalUrl?: string
     ): Promise<ProductResponseDto> {
         try {
             await this.findOne(productId);
@@ -977,14 +978,20 @@ export class ProductService implements IProductService {
 
             const sortOrder = maxSortOrder ? maxSortOrder.sortOrder + 1 : 0;
 
+            // External link: store the URL as-is. Storage key: derive a public
+            // URL from the key. `key` is non-nullable, so for external links we
+            // store the URL in both columns (removeImage is a soft-delete and
+            // never touches storage by key, so this is safe).
+            const resolvedKey = imageKey ?? externalUrl;
+            const resolvedUrl = externalUrl
+                ? externalUrl
+                : this.storageService.getPublicUrl(imageKey, 'publicAssets');
+
             await this.databaseService.productImage.create({
                 data: {
                     productId,
-                    key: imageKey,
-                    url: this.storageService.getPublicUrl(
-                        imageKey,
-                        'publicAssets'
-                    ),
+                    key: resolvedKey,
+                    url: resolvedUrl,
                     isPrimary,
                     sortOrder,
                 },

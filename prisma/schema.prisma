@@ -375,6 +375,7 @@ model Order {
   totalAmount    Decimal         @map("total_amount") @db.Decimal(20, 8)
   currency       String // USD, BTC, ETH, etc.
   cryptoPayment  CryptoPayment?
+  fiatPayment    FiatPayment?
   items          OrderItem[]
   review         OrderReview?
   supportTickets SupportTicket[]
@@ -541,6 +542,57 @@ enum PaymentStatus {
   FORWARDING_FAILED // Forwarding to platform wallet failed
   EXPIRED // Payment window expired (15 min)
   FAILED // Payment processing failed
+}
+
+// Fiat Payment System (hosted gateways, e.g. CHIME / Polapine)
+model FiatPayment {
+  id      String @id @default(uuid())
+  orderId String @unique @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Which provider handled this payment
+  gateway PaymentGateway
+
+  // Amount info (fiat is charged in the order currency, typically USD)
+  amount   Decimal @db.Decimal(20, 2)
+  currency String // USD, EUR, etc.
+
+  // Provider references
+  externalId        String? @map("external_id") // Gateway invoice / payment-link id
+  externalReference String? @map("external_reference") // order_reference we send to the gateway
+  checkoutUrl       String? @map("checkout_url") @db.Text // Hosted payment page URL
+
+  // Payment status
+  status FiatPaymentStatus @default(PENDING)
+
+  // Timestamps
+  expiresAt DateTime  @map("expires_at")
+  paidAt    DateTime? @map("paid_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  // Metadata (raw gateway payloads, etc.)
+  metadata Json?
+
+  @@index([status])
+  @@index([externalId])
+  @@index([expiresAt])
+  @@index([gateway])
+  @@map("fiat_payments")
+}
+
+enum PaymentGateway {
+  CHIME
+}
+
+enum FiatPaymentStatus {
+  PENDING // Awaiting payment (checkout created)
+  PROCESSING // Gateway reports payment in progress
+  PAID // Payment confirmed by gateway (order can proceed)
+  FAILED // Payment failed / declined
+  EXPIRED // Checkout window expired
+  CANCELLED // Buyer cancelled
+  REFUNDED // Payment refunded
 }
 
 // System Wallet Index Tracker
