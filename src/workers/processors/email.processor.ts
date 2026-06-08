@@ -6,6 +6,7 @@ import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { EMAIL_TEMPLATES } from 'src/common/email/enums/email-template.enum';
 import {
     IAccountBannedPayload,
+    IAdminLoginOtpPayload,
     IAdminPasswordChangedPayload,
     IForgotPasswordOtpPayload,
     IMonthlyStoreReportPayload,
@@ -70,6 +71,17 @@ export class EmailProcessorWorker {
             job,
             EMAIL_TEMPLATES.FORGOT_PASSWORD_OTP,
             'forgot-password OTP'
+        );
+    }
+
+    @Process(EMAIL_TEMPLATES.ADMIN_LOGIN_OTP)
+    async processAdminLoginOtp(
+        job: Job<ISendEmailBasePayload<IAdminLoginOtpPayload>>
+    ) {
+        await this.dispatch(
+            job,
+            EMAIL_TEMPLATES.ADMIN_LOGIN_OTP,
+            'admin-login OTP'
         );
     }
 

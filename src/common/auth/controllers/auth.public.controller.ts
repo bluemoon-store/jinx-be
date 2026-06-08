@@ -28,6 +28,9 @@ import { TwoFactorDisableDto } from '../dtos/request/auth.2fa.disable.dto';
 import { TwoFactorSetupDto } from '../dtos/request/auth.2fa.setup.dto';
 import { TwoFactorVerifyLoginDto } from '../dtos/request/auth.2fa.verify-login.dto';
 import { TwoFactorVerifyDto } from '../dtos/request/auth.2fa.verify.dto';
+import { AdminLoginDto } from '../dtos/request/auth.admin-login.dto';
+import { AdminResendOtpDto } from '../dtos/request/auth.admin-resend-otp.dto';
+import { AdminVerifyOtpDto } from '../dtos/request/auth.admin-verify-otp.dto';
 import { AcceptInvitationRequestDto } from '../dtos/request/accept-invitation.request';
 import { ChangeEmailDto } from '../dtos/request/auth.change-email.dto';
 import { ChangePasswordDto } from '../dtos/request/auth.change-password.dto';
@@ -43,6 +46,8 @@ import {
     TwoFactorVerifyResponseDto,
 } from '../dtos/response/auth.2fa.response';
 import {
+    AdminLoginChallengeResponseDto,
+    AdminLoginResponseSerializerDto,
     AuthRefreshResponseDto,
     AuthResponseDto,
     AuthSuccessResponseDto,
@@ -95,6 +100,55 @@ export class AuthPublicController {
         @Body() payload: TwoFactorVerifyLoginDto
     ): Promise<AuthResponseDto> {
         return this.authService.verifyTwoFactorLogin(payload);
+    }
+
+    @Post('admin/login')
+    @PublicRoute()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Admin login (step 1)',
+        description:
+            'Verifies admin credentials. When the email-code feature is enabled, emails a 6-digit code and returns a challengeToken (complete via POST /auth/admin/verify-otp). When disabled, returns tokens directly.',
+    })
+    @DocResponse({
+        serialization: AdminLoginResponseSerializerDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'auth.success.adminLoginOtpSent',
+    })
+    public adminLogin(
+        @Body() payload: AdminLoginDto
+    ): Promise<AdminLoginChallengeResponseDto | AuthResponseDto> {
+        return this.authService.adminLogin(payload);
+    }
+
+    @Post('admin/verify-otp')
+    @PublicRoute()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Admin login (step 2) — verify emailed code' })
+    @DocResponse({
+        serialization: AuthResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'auth.success.login',
+    })
+    public verifyAdminLoginOtp(
+        @Body() payload: AdminVerifyOtpDto
+    ): Promise<AuthResponseDto> {
+        return this.authService.verifyAdminLoginOtp(payload);
+    }
+
+    @Post('admin/resend-otp')
+    @PublicRoute()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Resend the admin login code' })
+    @DocResponse({
+        serialization: AuthSuccessResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'auth.success.adminLoginOtpSent',
+    })
+    public resendAdminLoginOtp(
+        @Body() payload: AdminResendOtpDto
+    ): Promise<AuthSuccessResponseDto> {
+        return this.authService.resendAdminLoginOtp(payload);
     }
 
     @Post('signup')

@@ -2,13 +2,13 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 
-export class UserLoginDto {
+/** Admin panel login (step 1). On success an email OTP is sent; complete via /auth/admin/verify-otp. */
+export class AdminLoginDto {
     @ApiProperty({
-        example: 'nguyen@echodzns.com',
+        example: 'owner@echodzns.com',
         required: true,
     })
-    // Normalize to match how accounts are stored (createByAdmin lowercases + trims the email),
-    // so login is case-insensitive and tolerant of stray copy/paste whitespace.
+    // Normalize to match how accounts are stored, mirroring UserLoginDto.
     @Transform(({ value }) =>
         typeof value === 'string' ? value.trim().toLowerCase() : value
     )
@@ -20,9 +20,6 @@ export class UserLoginDto {
         example: '6td6lPRZVC@@!827',
         required: true,
     })
-    // Trim only. Login must accept whatever password is stored — format rules belong on
-    // registration/password-reset, not here. A format regex on login rejects valid stored
-    // passwords (e.g. a trailing space copied from the generated-password field).
     @Transform(({ value }) =>
         typeof value === 'string' ? value.trim() : value
     )

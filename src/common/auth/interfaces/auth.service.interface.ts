@@ -4,6 +4,9 @@ import { TwoFactorDisableDto } from '../dtos/request/auth.2fa.disable.dto';
 import { TwoFactorSetupDto } from '../dtos/request/auth.2fa.setup.dto';
 import { TwoFactorVerifyLoginDto } from '../dtos/request/auth.2fa.verify-login.dto';
 import { TwoFactorVerifyDto } from '../dtos/request/auth.2fa.verify.dto';
+import { AdminLoginDto } from '../dtos/request/auth.admin-login.dto';
+import { AdminResendOtpDto } from '../dtos/request/auth.admin-resend-otp.dto';
+import { AdminVerifyOtpDto } from '../dtos/request/auth.admin-verify-otp.dto';
 import { ChangeEmailDto } from '../dtos/request/auth.change-email.dto';
 import { ChangePasswordDto } from '../dtos/request/auth.change-password.dto';
 import { ForgotPasswordDto } from '../dtos/request/auth.forgot-password.dto';
@@ -13,6 +16,7 @@ import { ResetPasswordDto } from '../dtos/request/auth.reset-password.dto';
 import { UserCreateDto } from '../dtos/request/auth.signup.dto';
 import { VerifyOtpDto } from '../dtos/request/auth.verify-otp.dto';
 import {
+    AdminLoginChallengeResponseDto,
     AuthRefreshResponseDto,
     AuthResponseDto,
     AuthSuccessResponseDto,
@@ -30,6 +34,13 @@ export interface IAuthService {
     verifyTwoFactorLogin(
         data: TwoFactorVerifyLoginDto
     ): Promise<AuthResponseDto>;
+    adminLogin(
+        data: AdminLoginDto
+    ): Promise<AdminLoginChallengeResponseDto | AuthResponseDto>;
+    verifyAdminLoginOtp(data: AdminVerifyOtpDto): Promise<AuthResponseDto>;
+    resendAdminLoginOtp(
+        data: AdminResendOtpDto
+    ): Promise<AuthSuccessResponseDto>;
     signup(data: UserCreateDto): Promise<AuthResponseDto>;
     logout(): Promise<{ success: boolean; message: string }>;
     refreshTokens(payload: IAuthUser): Promise<AuthRefreshResponseDto>;

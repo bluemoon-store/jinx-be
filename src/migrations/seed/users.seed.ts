@@ -6,7 +6,7 @@ import { PinoLogger } from 'nestjs-pino';
 import { DatabaseService } from 'src/common/database/services/database.service';
 
 const SEED_EMAIL = 'user@jinx.to';
-const SEED_ADMIN_EMAIL = 'admin@jinx.to';
+const SEED_ADMIN_EMAIL = 'support@bizzjinx.com';
 const SEED_PASSWORD = 'Test1234!';
 
 @Injectable()

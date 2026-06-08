@@ -13,6 +13,7 @@ import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { DatabaseService } from 'src/common/database/services/database.service';
 import { EMAIL_TEMPLATES } from 'src/common/email/enums/email-template.enum';
 import {
+    IAdminLoginOtpPayload,
     IAdminPasswordChangedPayload,
     IForgotPasswordOtpPayload,
     IPasswordChangedPayload,
@@ -20,6 +21,7 @@ import {
     ISendEmailBasePayload,
     IVerifyEmailPayload,
 } from 'src/common/helper/interfaces/email.interface';
+import { isPrivilegedAdminRole } from 'src/common/request/constants/roles.constant';
 
 import { HelperEncryptionService } from '../../helper/services/helper.encryption.service';
 import { IAuthUser } from '../../request/interfaces/request.interface';
@@ -29,6 +31,9 @@ import { TwoFactorDisableDto } from '../dtos/request/auth.2fa.disable.dto';
 import { TwoFactorSetupDto } from '../dtos/request/auth.2fa.setup.dto';
 import { TwoFactorVerifyLoginDto } from '../dtos/request/auth.2fa.verify-login.dto';
 import { TwoFactorVerifyDto } from '../dtos/request/auth.2fa.verify.dto';
+import { AdminLoginDto } from '../dtos/request/auth.admin-login.dto';
+import { AdminResendOtpDto } from '../dtos/request/auth.admin-resend-otp.dto';
+import { AdminVerifyOtpDto } from '../dtos/request/auth.admin-verify-otp.dto';
 import { ChangeEmailDto } from '../dtos/request/auth.change-email.dto';
 import { ChangePasswordDto } from '../dtos/request/auth.change-password.dto';
 import { ForgotPasswordDto } from '../dtos/request/auth.forgot-password.dto';
@@ -38,6 +43,7 @@ import { ResetPasswordDto } from '../dtos/request/auth.reset-password.dto';
 import { UserCreateDto } from '../dtos/request/auth.signup.dto';
 import { VerifyOtpDto } from '../dtos/request/auth.verify-otp.dto';
 import {
+    AdminLoginChallengeResponseDto,
     AuthRefreshResponseDto,
     AuthResponseDto,
     AuthSuccessResponseDto,
@@ -74,9 +80,10 @@ export class AuthService implements IAuthService {
             });
 
             if (!user) {
+                // Generic 401 (not 404) so we don't reveal which emails exist.
                 throw new HttpException(
-                    'user.error.userNotFound',
-                    HttpStatus.NOT_FOUND
+                    'auth.error.invalidCredentials',
+                    HttpStatus.UNAUTHORIZED
                 );
             }
 
@@ -101,9 +108,10 @@ export class AuthService implements IAuthService {
             );
 
             if (!passwordMatched) {
+                // Same generic 401 + message as the unknown-email case above.
                 throw new HttpException(
-                    'auth.error.invalidPassword',
-                    HttpStatus.BAD_REQUEST
+                    'auth.error.invalidCredentials',
+                    HttpStatus.UNAUTHORIZED
                 );
             }
 
@@ -195,6 +203,187 @@ export class AuthService implements IAuthService {
             ...tokens,
             user,
         };
+    }
+
+    public async adminLogin(
+        data: AdminLoginDto
+    ): Promise<AdminLoginChallengeResponseDto | AuthResponseDto> {
+        const { email, password } = data;
+
+        const user = await this.databaseService.user.findUnique({
+            where: { email },
+        });
+
+        if (!user) {
+            // Generic 401 (not 404) so we don't reveal which emails exist.
+            throw new HttpException(
+                'auth.error.invalidCredentials',
+                HttpStatus.UNAUTHORIZED
+            );
+        }
+
+        if (user.isBanned) {
+            throw new HttpException(
+                'auth.error.userBanned',
+                HttpStatus.FORBIDDEN
+            );
+        }
+
+        if (user.deletedAt) {
+            throw new HttpException(
+                'auth.error.accountDeleted',
+                HttpStatus.FORBIDDEN
+            );
+        }
+
+        const passwordMatched = await this.helperEncryptionService.match(
+            user.password,
+            password
+        );
+
+        if (!passwordMatched) {
+            throw new HttpException(
+                'auth.error.invalidCredentials',
+                HttpStatus.UNAUTHORIZED
+            );
+        }
+
+        // Admin panel access is staff/super-admin only — reject end users.
+        if (!isPrivilegedAdminRole(user.role)) {
+            throw new HttpException(
+                'auth.error.forbiddenAdmin',
+                HttpStatus.FORBIDDEN
+            );
+        }
+
+        // Feature flag: when disabled, admins sign in with password only.
+        const otpEnabled =
+            this.configService.get<boolean>('auth.adminLoginOtpEnabled') ??
+            true;
+
+        if (!otpEnabled) {
+            const tokens = await this.helperEncryptionService.createJwtTokens({
+                role: user.role,
+                userId: user.id,
+            });
+
+            return {
+                ...tokens,
+                user,
+            };
+        }
+
+        await this.issueAdminLoginOtp(user.id, user.email);
+
+        const challengeToken =
+            await this.helperEncryptionService.createTwoFactorToken(user.id);
+
+        return { challengeToken };
+    }
+
+    public async verifyAdminLoginOtp(
+        data: AdminVerifyOtpDto
+    ): Promise<AuthResponseDto> {
+        const { userId } =
+            await this.helperEncryptionService.verifyTwoFactorToken(
+                data.challengeToken
+            );
+
+        const user = await this.databaseService.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user || user.deletedAt) {
+            throw new HttpException(
+                'user.error.userNotFound',
+                HttpStatus.NOT_FOUND
+            );
+        }
+
+        if (user.isBanned) {
+            throw new HttpException(
+                'auth.error.userBanned',
+                HttpStatus.FORBIDDEN
+            );
+        }
+
+        if (!isPrivilegedAdminRole(user.role)) {
+            throw new HttpException(
+                'auth.error.forbiddenAdmin',
+                HttpStatus.FORBIDDEN
+            );
+        }
+
+        this.assertValidAdminLoginOtp(user, data.code);
+
+        await this.databaseService.user.update({
+            where: { id: user.id },
+            data: {
+                adminLoginOtp: null,
+                adminLoginOtpExpiry: null,
+            },
+        });
+
+        const tokens = await this.helperEncryptionService.createJwtTokens({
+            role: user.role,
+            userId: user.id,
+        });
+
+        return {
+            ...tokens,
+            user,
+        };
+    }
+
+    public async resendAdminLoginOtp(
+        data: AdminResendOtpDto
+    ): Promise<AuthSuccessResponseDto> {
+        const { userId } =
+            await this.helperEncryptionService.verifyTwoFactorToken(
+                data.challengeToken
+            );
+
+        const user = await this.databaseService.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (
+            user &&
+            !user.deletedAt &&
+            !user.isBanned &&
+            isPrivilegedAdminRole(user.role)
+        ) {
+            await this.issueAdminLoginOtp(user.id, user.email);
+        }
+
+        return {
+            success: true,
+            message: 'auth.success.adminLoginOtpSent',
+        };
+    }
+
+    /** Generate a fresh 6-digit admin login OTP (10-min expiry), persist it, and email it. */
+    private async issueAdminLoginOtp(
+        userId: string,
+        email: string
+    ): Promise<void> {
+        const otp = randomInt(0, 1_000_000).toString().padStart(6, '0');
+        const adminLoginOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+        await this.databaseService.user.update({
+            where: { id: userId },
+            data: {
+                adminLoginOtp: otp,
+                adminLoginOtpExpiry,
+            },
+        });
+
+        this.emailQueue.add(EMAIL_TEMPLATES.ADMIN_LOGIN_OTP, {
+            data: {
+                otp_code: otp,
+            },
+            toEmails: [email],
+        } as ISendEmailBasePayload<IAdminLoginOtpPayload>);
     }
 
     public async signup(data: UserCreateDto): Promise<AuthResponseDto> {
@@ -881,6 +1070,26 @@ export class AuthService implements IAuthService {
         ) {
             throw new HttpException(
                 'auth.error.invalidOrExpiredResetOtp',
+                HttpStatus.BAD_REQUEST
+            );
+        }
+    }
+
+    private assertValidAdminLoginOtp(
+        user: {
+            adminLoginOtp: string | null;
+            adminLoginOtpExpiry: Date | null;
+        },
+        otp: string
+    ): void {
+        if (
+            !user.adminLoginOtp ||
+            !user.adminLoginOtpExpiry ||
+            user.adminLoginOtp !== otp ||
+            user.adminLoginOtpExpiry <= new Date()
+        ) {
+            throw new HttpException(
+                'auth.error.invalidOrExpiredAdminLoginOtp',
                 HttpStatus.BAD_REQUEST
             );
         }

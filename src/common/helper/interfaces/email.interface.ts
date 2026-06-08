@@ -15,6 +15,10 @@ export interface IForgotPasswordOtpPayload {
     otp_code: string;
 }
 
+export interface IAdminLoginOtpPayload {
+    otp_code: string;
+}
+
 export interface IResetPasswordLinkPayload {
     reset_link: string;
     userName: string;

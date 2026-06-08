@@ -49,6 +49,41 @@ export class TwoFactorChallengeResponseDto {
     twoFactorToken: string;
 }
 
+/** Returned from POST /auth/admin/login — an email OTP was sent; complete via /auth/admin/verify-otp. */
+export class AdminLoginChallengeResponseDto {
+    @ApiProperty({
+        example: faker.string.alphanumeric({ length: 120 }),
+        description:
+            'Short-lived JWT (5m); POST to /auth/admin/verify-otp with the emailed 6-digit code.',
+    })
+    @Expose()
+    challengeToken: string;
+}
+
+/**
+ * Serializer for POST /auth/admin/login union — a full auth response (when the OTP
+ * feature flag is off) OR an email-OTP challenge (when on). Used by ResponseInterceptor.
+ */
+export class AdminLoginResponseSerializerDto {
+    @ApiPropertyOptional()
+    @Expose()
+    accessToken?: string;
+
+    @ApiPropertyOptional()
+    @Expose()
+    refreshToken?: string;
+
+    @ApiPropertyOptional({ type: () => UserResponseDto })
+    @Expose()
+    @Type(() => UserResponseDto)
+    @ValidateNested()
+    user?: UserResponseDto;
+
+    @ApiPropertyOptional()
+    @Expose()
+    challengeToken?: string;
+}
+
 /**
  * Serializer for POST /auth/login union (full auth OR 2FA challenge) — used by ResponseInterceptor.
  */

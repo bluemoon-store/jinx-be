@@ -48,6 +48,8 @@ model User {
 
   passwordResetOtp               String?   @map("password_reset_otp")
   passwordResetOtpExpiry         DateTime? @map("password_reset_otp_expiry")
+  adminLoginOtp                  String?   @map("admin_login_otp")
+  adminLoginOtpExpiry            DateTime? @map("admin_login_otp_expiry")
   emailVerificationToken         String?   @map("email_verification_token")
   emailVerificationTokenExpiry   DateTime? @map("email_verification_token_expiry")
   invitedBy                      String?   @map("invited_by")

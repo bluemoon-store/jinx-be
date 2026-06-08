@@ -1,5 +1,6 @@
 export enum EMAIL_TEMPLATES {
     FORGOT_PASSWORD_OTP = 'forgot-password-otp',
+    ADMIN_LOGIN_OTP = 'admin-login-otp',
     VERIFY_EMAIL = 'verify-email',
     RESET_PASSWORD_LINK = 'reset-password-link',
     WELCOME_TO_JINX_MANAGEMENT = 'welcome-to-jinx-management',
@@ -15,6 +16,7 @@ export enum EMAIL_TEMPLATES {
 
 export enum EMAIL_TEMPLATE_SUBJECTS {
     FORGOT_PASSWORD_OTP = 'Reset your password — verification code',
+    ADMIN_LOGIN_OTP = 'Your admin login code',
     VERIFY_EMAIL = 'Verify your email address',
     RESET_PASSWORD_LINK = 'Reset your password',
     WELCOME_TO_JINX_MANAGEMENT = 'Welcome to Jinx Management',

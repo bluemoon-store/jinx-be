@@ -11,5 +11,6 @@ export default registerAs(
             secret: process.env.AUTH_REFRESH_TOKEN_SECRET,
             tokenExp: process.env.AUTH_REFRESH_TOKEN_EXP,
         },
+        adminLoginOtpEnabled: process.env.ADMIN_LOGIN_OTP_ENABLED !== 'false',
     })
 );
