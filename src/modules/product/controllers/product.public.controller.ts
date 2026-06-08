@@ -46,6 +46,7 @@ export class ProductPublicController {
             limit: query.limit,
             categoryId: query.categoryId,
             categorySlug: query.categorySlug,
+            type: query.type,
             isActive: query.isActive ?? true,
             isHot: query.isHot,
             isNew: query.isNew,

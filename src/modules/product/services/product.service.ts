@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable, HttpException } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { Prisma } from '@prisma/client';
+import { Prisma, ProductType } from '@prisma/client';
 
 import { DatabaseService } from 'src/common/database/services/database.service';
 import { SupabaseStorageService } from 'src/common/storage/services/supabase.storage.service';
@@ -194,6 +194,7 @@ export class ProductService implements IProductService {
             isHot?: boolean;
             isNew?: boolean;
             isRestocked?: boolean;
+            type?: ProductType;
         },
         base: Prisma.ProductWhereInput = { deletedAt: null }
     ): Prisma.ProductWhereInput {
@@ -201,6 +202,10 @@ export class ProductService implements IProductService {
 
         if (options.categoryId) {
             where.categoryId = options.categoryId;
+        }
+
+        if (options.type) {
+            where.type = options.type;
         }
 
         if (options.categorySlug) {
@@ -315,6 +320,7 @@ export class ProductService implements IProductService {
                     slug,
                     description: data.description,
                     price: data.price,
+                    type: data.type ?? 'STANDARD',
                     stockQuantity: data.stockQuantity ?? 0,
                     isActive: data.isActive ?? true,
                     sortOrder: data.sortOrder ?? 0,
@@ -401,6 +407,7 @@ export class ProductService implements IProductService {
         isHot?: boolean;
         isNew?: boolean;
         isRestocked?: boolean;
+        type?: ProductType;
         sortBy?: string;
         sortOrder?: SortOrder;
     }): Promise<ApiPaginatedDataDto<ProductListResponseDto>> {
@@ -412,6 +419,7 @@ export class ProductService implements IProductService {
                 isHot: options?.isHot,
                 isNew: options?.isNew,
                 isRestocked: options?.isRestocked,
+                type: options?.type,
             });
 
             const orderBy = this.resolveListOrderBy({
@@ -463,6 +471,7 @@ export class ProductService implements IProductService {
                 isHot: query.isHot,
                 isNew: query.isNew,
                 isRestocked: query.isRestocked,
+                type: query.type,
             });
 
             if (query.minPrice !== undefined || query.maxPrice !== undefined) {
@@ -747,6 +756,7 @@ export class ProductService implements IProductService {
             assignScalar('name', rest.name);
             assignScalar('description', rest.description);
             assignScalar('price', rest.price);
+            assignScalar('type', rest.type);
             assignScalar('stockQuantity', rest.stockQuantity);
             assignScalar('isActive', rest.isActive);
             assignScalar('sortOrder', rest.sortOrder);

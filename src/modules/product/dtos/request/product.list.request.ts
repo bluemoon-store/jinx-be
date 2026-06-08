@@ -7,6 +7,7 @@ import {
     IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ProductType } from '@prisma/client';
 
 import { SortOrder } from 'src/common/helper/dtos/query.dto';
 
@@ -49,6 +50,14 @@ export class ProductListQueryDto {
     @IsOptional()
     @IsString()
     categorySlug?: string;
+
+    @ApiPropertyOptional({
+        description: 'Filter by product type',
+        enum: ProductType,
+    })
+    @IsOptional()
+    @IsEnum(ProductType)
+    type?: ProductType;
 
     @ApiPropertyOptional({
         description: 'Filter by active status',

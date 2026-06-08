@@ -8,7 +8,9 @@ import {
     IsBoolean,
     Min,
     IsNumber,
+    IsEnum,
 } from 'class-validator';
+import { ProductType } from '@prisma/client';
 import { BasePrismaQueryDto } from 'src/common/helper/dtos/query.dto';
 
 export class ProductSearchDto extends BasePrismaQueryDto {
@@ -43,6 +45,14 @@ export class ProductSearchDto extends BasePrismaQueryDto {
     @IsOptional()
     @IsString()
     categorySlug?: string;
+
+    @ApiPropertyOptional({
+        description: 'Filter by product type',
+        enum: ProductType,
+    })
+    @IsOptional()
+    @IsEnum(ProductType)
+    type?: ProductType;
 
     @ApiPropertyOptional({
         description: 'Hot selling products',

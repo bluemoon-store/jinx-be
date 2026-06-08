@@ -141,6 +141,7 @@ model Product {
   slug            String          @unique
   description     String          @db.Text
   price           Decimal         @db.Decimal(20, 8) // Support crypto decimals (fallback when no variants)
+  type            ProductType     @default(STANDARD)
   stockQuantity   Int             @default(0) @map("stock_quantity")
   isActive        Boolean         @default(true) @map("is_active")
   sortOrder       Int             @default(0) @map("sort_order")
@@ -178,7 +179,14 @@ model Product {
   @@index([categoryId])
   @@index([slug])
   @@index([isActive])
+  @@index([type])
   @@map("products")
+}
+
+enum ProductType {
+  STANDARD // Regular product
+  ACCOUNT // Account / service product
+  GIFT_CARD // Gift card template (used by the gift card template engine)
 }
 
 model ProductVariant {

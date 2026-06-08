@@ -1,6 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { faker } from '@faker-js/faker';
-import { DeliveryType, Prisma, Product, ProductImage } from '@prisma/client';
+import {
+    DeliveryType,
+    Prisma,
+    Product,
+    ProductImage,
+    ProductType,
+} from '@prisma/client';
 import { Expose, Type } from 'class-transformer';
 import {
     IsString,
@@ -168,6 +174,14 @@ export class ProductResponseDto implements Product {
     @Expose()
     @Type(() => String)
     price: Prisma.Decimal;
+
+    @ApiProperty({
+        enum: ProductType,
+        example: ProductType.STANDARD,
+    })
+    @Expose()
+    @IsEnum(ProductType)
+    type: ProductType;
 
     @ApiProperty({
         example: 100,

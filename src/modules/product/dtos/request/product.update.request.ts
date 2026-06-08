@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { faker } from '@faker-js/faker';
-import { DeliveryType } from '@prisma/client';
+import { DeliveryType, ProductType } from '@prisma/client';
 import {
     IsString,
     IsUUID,
@@ -60,6 +60,14 @@ export class ProductUpdateDto {
     @IsOptional()
     @IsString()
     price?: string;
+
+    @ApiPropertyOptional({
+        enum: ProductType,
+        description: 'Product type (STANDARD, ACCOUNT, or GIFT_CARD)',
+    })
+    @IsOptional()
+    @IsEnum(ProductType)
+    type?: ProductType;
 
     @ApiPropertyOptional({
         example: 100,
