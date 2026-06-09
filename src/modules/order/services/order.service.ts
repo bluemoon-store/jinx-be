@@ -172,6 +172,43 @@ export class OrderService implements IOrderService {
     }
 
     /**
+     * Fetch an order with the full item/product/payment graph used by the
+     * order response. Shared by createOrder and the reuse-pending-order path.
+     */
+    private async fetchCompleteOrder(
+        orderId: string
+    ): Promise<OrderResponseDto> {
+        const completeOrder = await this.databaseService.order.findUnique({
+            where: { id: orderId },
+            include: {
+                items: {
+                    include: {
+                        product: {
+                            include: {
+                                category: true,
+                                images: {
+                                    where: { deletedAt: null },
+                                    orderBy: [
+                                        { isPrimary: 'desc' },
+                                        { sortOrder: 'asc' },
+                                    ],
+                                },
+                            },
+                        },
+                        vouches: {
+                            where: { deletedAt: null },
+                            orderBy: { createdAt: 'desc' },
+                        },
+                    },
+                },
+                cryptoPayment: true,
+            },
+        });
+
+        return completeOrder as unknown as OrderResponseDto;
+    }
+
+    /**
      * Create order from cart
      */
     async createOrder(
@@ -179,6 +216,30 @@ export class OrderService implements IOrderService {
         data: OrderCreateDto
     ): Promise<OrderResponseDto> {
         try {
+            // Reuse an existing, still-fresh PENDING order instead of creating a
+            // duplicate (and re-reserving stock) when the user retries or switches
+            // payment method. Freshness = created within the stock-reservation
+            // window, so its reservations are still valid.
+            const reservationWindowMs =
+                this.stockLineService
+                    .getDefaultReservationDeadline()
+                    .getTime() - Date.now();
+            const existingPending = await this.databaseService.order.findFirst({
+                where: {
+                    userId,
+                    status: OrderStatus.PENDING,
+                    deletedAt: null,
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            if (
+                existingPending &&
+                existingPending.createdAt.getTime() >
+                    Date.now() - reservationWindowMs
+            ) {
+                return this.fetchCompleteOrder(existingPending.id);
+            }
+
             // Validate cart and stock
             await this.validateCartForOrder(userId);
 
@@ -369,41 +430,14 @@ export class OrderService implements IOrderService {
                     orderItems.push(orderItem);
                 }
 
-                // Clear cart
-                await tx.cartItem.deleteMany({
-                    where: { cartId: cart.id },
-                });
-
+                // Cart is intentionally NOT cleared here. It is cleared atomically
+                // with payment capture (wallet/crypto/fiat completion), so a failed
+                // or abandoned payment leaves the cart intact for retry.
                 return { order: newOrder, items: orderItems };
             });
 
             // Fetch complete order with items and crypto payment
-            const completeOrder = await this.databaseService.order.findUnique({
-                where: { id: order.order.id },
-                include: {
-                    items: {
-                        include: {
-                            product: {
-                                include: {
-                                    category: true,
-                                    images: {
-                                        where: { deletedAt: null },
-                                        orderBy: [
-                                            { isPrimary: 'desc' },
-                                            { sortOrder: 'asc' },
-                                        ],
-                                    },
-                                },
-                            },
-                            vouches: {
-                                where: { deletedAt: null },
-                                orderBy: { createdAt: 'desc' },
-                            },
-                        },
-                    },
-                    cryptoPayment: true,
-                },
-            });
+            const completeOrder = await this.fetchCompleteOrder(order.order.id);
 
             this.logger.info(
                 {
@@ -481,6 +515,10 @@ export class OrderService implements IOrderService {
             const updatedOrder = await this.databaseService.$transaction(
                 async tx => {
                     await this.stockLineService.markSoldForOrder(tx, orderId);
+                    // Clear the cart atomically with payment capture.
+                    await tx.cartItem.deleteMany({
+                        where: { cart: { userId } },
+                    });
                     return tx.order.update({
                         where: { id: orderId },
                         data: {

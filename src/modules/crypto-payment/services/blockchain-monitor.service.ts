@@ -826,6 +826,10 @@ export class BlockchainMonitorService implements IBlockchainMonitorService {
                         },
                     });
                     await this.stockLineService.markSoldForOrder(tx, p.orderId);
+                    // Clear the buyer's cart atomically with payment confirmation.
+                    await tx.cartItem.deleteMany({
+                        where: { cart: { userId: p.order.userId } },
+                    });
                     await tx.order.update({
                         where: { id: p.orderId },
                         data: {
