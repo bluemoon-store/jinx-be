@@ -4,8 +4,6 @@ import { Prisma, ProductType } from '@prisma/client';
 
 import { DatabaseService } from 'src/common/database/services/database.service';
 import { SupabaseStorageService } from 'src/common/storage/services/supabase.storage.service';
-import { HelperPaginationService } from 'src/common/helper/services/helper.pagination.service';
-import { OrderByInput } from 'src/common/helper/interfaces/pagination.interface';
 import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic.dto';
 import { ApiPaginatedDataDto } from 'src/common/response/dtos/response.paginated.dto';
 
@@ -26,6 +24,10 @@ import {
     computePrimaryImageUrl,
     generateSlug,
 } from '../utils/product.util';
+import {
+    generateUniqueReferenceCode,
+    REFERENCE_PREFIX,
+} from '../../../common/utils/reference-code.util';
 import {
     AdminProductVariantCreateDto,
     AdminProductVariantUpdateDto,
@@ -86,7 +88,6 @@ const adminInclude = {
 export class ProductService implements IProductService {
     constructor(
         private readonly databaseService: DatabaseService,
-        private readonly paginationService: HelperPaginationService,
         private readonly activityLogEmitter: ActivityLogEmitterService,
         private readonly storageService: SupabaseStorageService,
         private readonly logger: PinoLogger
@@ -293,6 +294,102 @@ export class ProductService implements IProductService {
         });
     }
 
+    /**
+     * A product counts as in stock when it has product-level stock OR at least
+     * one active variant with stock — mirroring the storefront's out-of-stock
+     * badge logic.
+     */
+    private static readonly IN_STOCK_CONDITION: Prisma.ProductWhereInput = {
+        OR: [
+            { stockQuantity: { gt: 0 } },
+            {
+                variants: {
+                    some: { isActive: true, stockQuantity: { gt: 0 } },
+                },
+            },
+        ],
+    };
+
+    /**
+     * Paginate products with in-stock items first and out-of-stock items pushed
+     * to the end, preserving `orderBy` within each group. The page is sliced
+     * across two buckets (A = in stock, B = out of stock) so the ordering is
+     * applied at the database level, before LIMIT/OFFSET — necessary because the
+     * storefront grid is server-paginated and a client-side sort could only
+     * reorder the page already loaded.
+     */
+    private async paginateInStockFirst(
+        where: Prisma.ProductWhereInput,
+        orderBy: Prisma.ProductOrderByWithRelationInput[],
+        page: number,
+        limit: number
+    ): Promise<
+        ApiPaginatedDataDto<
+            Prisma.ProductGetPayload<{ include: typeof listInclude }>
+        >
+    > {
+        const currentPage = Math.max(1, page);
+        const itemsPerPage = Math.min(Math.max(1, limit), 100);
+        const skip = (currentPage - 1) * itemsPerPage;
+
+        const inStockWhere: Prisma.ProductWhereInput = {
+            AND: [where, ProductService.IN_STOCK_CONDITION],
+        };
+        const outOfStockWhere: Prisma.ProductWhereInput = {
+            AND: [where, { NOT: ProductService.IN_STOCK_CONDITION }],
+        };
+
+        // Run sequentially to avoid opening multiple pooled DB connections per
+        // request (same rationale as HelperPaginationService).
+        const countIn = await this.databaseService.product.count({
+            where: inStockWhere,
+        });
+        const countOut = await this.databaseService.product.count({
+            where: outOfStockWhere,
+        });
+        const totalItems = countIn + countOut;
+
+        // Slice the window [skip, skip + itemsPerPage) across the concatenation
+        // [ in-stock (0..countIn) , out-of-stock (countIn..) ].
+        const aTake = Math.max(
+            0,
+            Math.min(skip + itemsPerPage, countIn) - skip
+        );
+        const bSkip = Math.max(0, skip - countIn);
+        const bTake = itemsPerPage - aTake;
+
+        const itemsA =
+            aTake > 0
+                ? await this.databaseService.product.findMany({
+                      where: inStockWhere,
+                      include: listInclude,
+                      orderBy,
+                      skip: Math.min(skip, countIn),
+                      take: aTake,
+                  })
+                : [];
+        const itemsB =
+            bTake > 0
+                ? await this.databaseService.product.findMany({
+                      where: outOfStockWhere,
+                      include: listInclude,
+                      orderBy,
+                      skip: bSkip,
+                      take: bTake,
+                  })
+                : [];
+
+        return {
+            metadata: {
+                totalItems,
+                itemsPerPage,
+                totalPages: Math.ceil(totalItems / itemsPerPage),
+                currentPage,
+            },
+            items: [...itemsA, ...itemsB],
+        };
+    }
+
     async create(data: ProductCreateDto): Promise<ProductResponseDto> {
         try {
             const category =
@@ -314,10 +411,19 @@ export class ProductService implements IProductService {
                 ? await this.ensureUniqueSlug(generateSlug(data.slug))
                 : await this.ensureUniqueSlug(generateSlug(data.name));
 
+            const referenceCode = await generateUniqueReferenceCode(
+                REFERENCE_PREFIX.PRODUCT,
+                async code =>
+                    !!(await this.databaseService.product.findUnique({
+                        where: { referenceCode: code },
+                    }))
+            );
+
             const product = await this.databaseService.product.create({
                 data: {
                     name: data.name,
                     slug,
+                    referenceCode,
                     description: data.description,
                     price: data.price,
                     type: data.type ?? 'STANDARD',
@@ -430,21 +536,11 @@ export class ProductService implements IProductService {
                 sortOrder: options?.sortOrder,
             });
 
-            type ListPayload = Prisma.ProductGetPayload<{
-                include: typeof listInclude;
-            }>;
-
-            const result = await this.paginationService.paginate<ListPayload>(
-                this.databaseService.product,
-                {
-                    page: options?.page ?? 1,
-                    limit: options?.limit ?? 10,
-                },
-                {
-                    where,
-                    include: listInclude,
-                    orderBy: orderBy as OrderByInput[],
-                }
+            const result = await this.paginateInStockFirst(
+                where,
+                orderBy,
+                options?.page ?? 1,
+                options?.limit ?? 10
             );
 
             return {
@@ -521,21 +617,11 @@ export class ProductService implements IProductService {
                 });
             }
 
-            type ListPayload = Prisma.ProductGetPayload<{
-                include: typeof listInclude;
-            }>;
-
-            const result = await this.paginationService.paginate<ListPayload>(
-                this.databaseService.product,
-                {
-                    page: query.page ?? 1,
-                    limit: query.limit ?? 10,
-                },
-                {
-                    where,
-                    include: listInclude,
-                    orderBy: orderBy as OrderByInput[],
-                }
+            const result = await this.paginateInStockFirst(
+                where,
+                orderBy,
+                query.page ?? 1,
+                query.limit ?? 10
             );
 
             return {

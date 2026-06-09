@@ -25,6 +25,10 @@ import {
     deriveDropStatus,
     isUserAllowed,
 } from '../utils/drop.util';
+import {
+    generateUniqueReferenceCode,
+    REFERENCE_PREFIX,
+} from '../../../common/utils/reference-code.util';
 
 @Injectable()
 export class DropService {
@@ -108,6 +112,8 @@ export class DropService {
         const primaryImage = row.drop.product.images?.[0] ?? null;
         return {
             claimId: row.id,
+            referenceCode: row.referenceCode ?? null,
+            dropReferenceCode: row.drop.referenceCode ?? null,
             dropId: row.dropId,
             productId: row.drop.product.id,
             variantId: row.drop.variant.id,
@@ -136,6 +142,7 @@ export class DropService {
         const primaryImage = row.product.images?.[0] ?? null;
         return {
             id: row.id,
+            referenceCode: row.referenceCode ?? null,
             productId: row.productId,
             variantId: row.variantId,
             product: {
@@ -213,8 +220,17 @@ export class DropService {
         const expiresAt = this.normalizeExpiresAt(payload.expiresAt);
         this.validateExpiresAt(expiresAt);
 
+        const referenceCode = await generateUniqueReferenceCode(
+            REFERENCE_PREFIX.DROP,
+            async code =>
+                !!(await this.databaseService.drop.findUnique({
+                    where: { referenceCode: code },
+                }))
+        );
+
         const row = await this.databaseService.drop.create({
             data: {
+                referenceCode,
                 productId: payload.productId,
                 variantId: payload.variantId,
                 quantity: payload.quantity,
@@ -595,8 +611,18 @@ export class DropService {
                         data: { stockQuantity: { decrement: 1 } },
                     });
 
+                    const claimReferenceCode =
+                        await generateUniqueReferenceCode(
+                            REFERENCE_PREFIX.CLAIM,
+                            async code =>
+                                !!(await tx.dropClaim.findUnique({
+                                    where: { referenceCode: code },
+                                }))
+                        );
+
                     await tx.dropClaim.create({
                         data: {
+                            referenceCode: claimReferenceCode,
                             dropId: drop.id,
                             userId,
                             stockLineId: line.id,
@@ -605,6 +631,7 @@ export class DropService {
                     });
 
                     const result = {
+                        referenceCode: claimReferenceCode,
                         claimedContent: line.content,
                         productSlug: drop.product.slug,
                         productId: drop.product.id,

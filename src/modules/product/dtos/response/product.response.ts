@@ -147,6 +147,15 @@ export class ProductResponseDto implements Product {
     @IsUUID()
     id: string;
 
+    @ApiPropertyOptional({
+        nullable: true,
+        example: 'JINX-PRD-690218374',
+    })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    referenceCode: string | null;
+
     @ApiProperty({
         example: faker.commerce.productName(),
     })

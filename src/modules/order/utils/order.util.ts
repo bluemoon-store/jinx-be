@@ -1,11 +1,14 @@
 /**
  * Order utility functions
  */
+import {
+    generateReferenceCode,
+    REFERENCE_PREFIX,
+} from '../../../common/utils/reference-code.util';
 
 export const BUYER_PROTECTION_FEE_USD = 5;
 
-export function generateOrderNumberString(date: Date = new Date()): string {
-    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const randomStr = Math.random().toString(36).substring(2, 7).toUpperCase();
-    return `ORD-${dateStr}-${randomStr}`;
+/** Compact order number, e.g. JINX-ORD-738291045 */
+export function generateOrderNumberString(): string {
+    return generateReferenceCode(REFERENCE_PREFIX.ORDER);
 }

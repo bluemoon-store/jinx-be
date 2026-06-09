@@ -137,6 +137,7 @@ model CouponCategory {
 // Product
 model Product {
   id              String          @id @default(uuid())
+  referenceCode   String?         @unique @map("reference_code") // e.g., JINX-PRD-123456789
   name            String
   slug            String          @unique
   description     String          @db.Text
@@ -245,6 +246,7 @@ model ProductStockLine {
 
 model Drop {
   id            String         @id @default(uuid())
+  referenceCode String?        @unique @map("reference_code") // e.g., JINX-DRP-123456789
   productId     String         @map("product_id")
   variantId     String         @map("variant_id")
   product       Product        @relation(fields: [productId], references: [id])
@@ -269,6 +271,7 @@ model Drop {
 
 model DropClaim {
   id             String            @id @default(uuid())
+  referenceCode  String?           @unique @map("reference_code") // e.g., JINX-CLM-123456789
   dropId         String            @map("drop_id")
   userId         String            @map("user_id")
   stockLineId    String?           @unique @map("stock_line_id")

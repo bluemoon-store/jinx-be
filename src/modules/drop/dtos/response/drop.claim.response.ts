@@ -10,6 +10,12 @@ import {
 } from 'class-validator';
 
 export class DropClaimResponseDto {
+    @ApiPropertyOptional({ nullable: true, example: 'JINX-CLM-104857392' })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    referenceCode: string | null;
+
     @ApiProperty()
     @Expose()
     @IsString()
@@ -65,6 +71,18 @@ export class MyDropClaimResponseDto {
     @Expose()
     @IsUUID()
     claimId: string;
+
+    @ApiPropertyOptional({ nullable: true, example: 'JINX-CLM-104857392' })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    referenceCode: string | null;
+
+    @ApiPropertyOptional({ nullable: true, example: 'JINX-DRP-512903847' })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    dropReferenceCode: string | null;
 
     @ApiProperty()
     @Expose()

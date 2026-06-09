@@ -75,6 +75,12 @@ export class DropResponseDto {
     @IsUUID()
     id: string;
 
+    @ApiPropertyOptional({ nullable: true, example: 'JINX-DRP-738291045' })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    referenceCode: string | null;
+
     @ApiProperty()
     @Expose()
     @IsUUID()
