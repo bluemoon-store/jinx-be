@@ -10,7 +10,7 @@ import {
     EMAIL_TEMPLATES,
     EMAIL_TEMPLATE_SUBJECTS,
 } from 'src/common/email/enums/email-template.enum';
-import { SmtpService } from 'src/common/email/services/smtp.service';
+import { ResendService } from 'src/common/email/services/resend.service';
 
 import { ISendEmailParams } from '../interfaces/email.interface';
 import {
@@ -26,7 +26,7 @@ export class HelperEmailService implements IHelperEmailService {
     >();
 
     constructor(
-        private readonly smtpService: SmtpService,
+        private readonly resendService: ResendService,
         private readonly configService: ConfigService,
         private readonly logger: PinoLogger
     ) {
@@ -44,7 +44,7 @@ export class HelperEmailService implements IHelperEmailService {
             this.mergeCommonContext(payload ?? {})
         );
 
-        return this.smtpService.send({
+        return this.resendService.send({
             to: emails,
             subject,
             html,

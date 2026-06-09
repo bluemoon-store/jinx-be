@@ -5,6 +5,7 @@ import DocConfig from './doc.config';
 import FirebaseConfig from './firebase.config';
 import PaymentGatewayConfig from './payment-gateway.config';
 import RedisConfig from './redis.config';
+import ResendConfig from './resend.config';
 import SmtpConfig from './smtp.config';
 import SupabaseConfig from './supabase.config';
 
@@ -17,5 +18,6 @@ export default [
     FirebaseConfig,
     CryptoConfig,
     SmtpConfig,
+    ResendConfig,
     PaymentGatewayConfig,
 ];
