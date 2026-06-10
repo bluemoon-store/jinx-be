@@ -65,8 +65,4 @@ export interface IProductService {
         productId: string,
         variantId: string
     ): Promise<ProductResponseDto>;
-    setRelatedProducts(
-        productId: string,
-        relatedProductIds: string[]
-    ): Promise<ProductResponseDto>;
 }

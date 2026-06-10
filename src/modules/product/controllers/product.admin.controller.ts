@@ -37,7 +37,6 @@ import { ProductSearchDto } from '../dtos/request/product.search.request';
 import { ProductListQueryDto } from '../dtos/request/product.list.request';
 import { CategoryListQueryDto } from '../dtos/request/category.list.request';
 import {
-    AdminProductRelatedSetDto,
     AdminProductImageCreateDto,
     AdminProductVariantCreateDto,
     AdminProductVariantUpdateDto,
@@ -320,25 +319,6 @@ export class ProductAdminController {
         @Param('variantId') variantId: string
     ): Promise<ProductResponseDto> {
         return this.productService.deleteVariant(productId, variantId);
-    }
-
-    @Put(':id/related')
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
-    @ApiBearerAuth('accessToken')
-    @ApiOperation({ summary: 'Set related products' })
-    @DocResponse({
-        serialization: ProductResponseDto,
-        httpStatus: HttpStatus.OK,
-        messageKey: 'product.success.updated',
-    })
-    public async setRelated(
-        @Param('id') productId: string,
-        @Body() payload: AdminProductRelatedSetDto
-    ): Promise<ProductResponseDto> {
-        return this.productService.setRelatedProducts(
-            productId,
-            payload.relatedProductIds
-        );
     }
 
     // Product by ID and CRUD

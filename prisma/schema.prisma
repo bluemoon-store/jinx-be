@@ -170,8 +170,6 @@ model Product {
 
   variants    ProductVariant[]
   drops       Drop[]
-  relatedFrom ProductRelated[] @relation("RelatedFrom")
-  relatedTo   ProductRelated[] @relation("RelatedTo")
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -304,16 +302,6 @@ model DropClaimVouch {
   @@index([userId])
   @@index([createdAt])
   @@map("drop_claim_vouches")
-}
-
-model ProductRelated {
-  productId        String  @map("product_id")
-  relatedProductId String  @map("related_product_id")
-  product          Product @relation("RelatedFrom", fields: [productId], references: [id], onDelete: Cascade)
-  relatedProduct   Product @relation("RelatedTo", fields: [relatedProductId], references: [id], onDelete: Cascade)
-
-  @@id([productId, relatedProductId])
-  @@map("product_related")
 }
 
 enum DeliveryType {

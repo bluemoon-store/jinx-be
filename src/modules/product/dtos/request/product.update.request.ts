@@ -201,13 +201,4 @@ export class ProductUpdateDto {
     @ValidateNested({ each: true })
     @Type(() => ProductVariantUpdateInputDto)
     variants?: ProductVariantUpdateInputDto[];
-
-    @ApiPropertyOptional({
-        type: [String],
-        description: 'Related product IDs (replaces existing)',
-    })
-    @IsOptional()
-    @IsArray()
-    @IsUUID('4', { each: true })
-    relatedProductIds?: string[];
 }

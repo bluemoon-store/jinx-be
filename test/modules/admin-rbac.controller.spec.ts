@@ -118,7 +118,6 @@ describe('Admin RBAC controller metadata', () => {
                 'addVariant',
                 'updateVariant',
                 'deleteVariant',
-                'setRelated',
                 'update',
                 'delete',
                 'updateStock',

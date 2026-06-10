@@ -56,17 +56,6 @@ const listInclude = {
     },
 } satisfies Prisma.ProductInclude;
 
-const detailInclude = {
-    ...listInclude,
-    relatedFrom: {
-        include: {
-            relatedProduct: {
-                include: listInclude,
-            },
-        },
-    },
-} satisfies Prisma.ProductInclude;
-
 const adminInclude = {
     category: true,
     images: {
@@ -120,30 +109,40 @@ export class ProductService implements IProductService {
     }
 
     private mapToDetailDto(
-        product: Prisma.ProductGetPayload<{ include: typeof detailInclude }>
+        product: Prisma.ProductGetPayload<{ include: typeof listInclude }>,
+        related: ProductListResponseDto[]
     ): ProductDetailResponseDto {
         const list = this.mapToListDto(product);
-        const related = product.relatedFrom
-            .filter(
-                row =>
-                    row.relatedProduct &&
-                    row.relatedProduct.deletedAt === null &&
-                    row.relatedProduct.isActive
-            )
-            .map(row =>
-                this.mapToListDto(
-                    row.relatedProduct as Prisma.ProductGetPayload<{
-                        include: typeof listInclude;
-                    }>
-                )
-            )
-            .slice(0, 20);
         return {
             ...list,
             heroImageUrl: list.primaryImageUrl,
             variants: list.variants,
             related,
         };
+    }
+
+    private async findRandomRelated(
+        productId: string,
+        limit = 10
+    ): Promise<ProductListResponseDto[]> {
+        const rows = await this.databaseService.$queryRaw<
+            Array<{ id: string }>
+        >(
+            Prisma.sql`SELECT id FROM products
+                WHERE is_active = true AND deleted_at IS NULL AND id <> ${productId}
+                ORDER BY RANDOM() LIMIT ${limit}`
+        );
+        const ids = rows.map(r => r.id);
+        if (ids.length === 0) return [];
+        const products = await this.databaseService.product.findMany({
+            where: { id: { in: ids } },
+            include: listInclude,
+        });
+        return products.map(p =>
+            this.mapToListDto(
+                p as Prisma.ProductGetPayload<{ include: typeof listInclude }>
+            )
+        );
     }
 
     private mapToAdminDto(
@@ -674,7 +673,7 @@ export class ProductService implements IProductService {
                     slug,
                     deletedAt: null,
                 },
-                include: detailInclude,
+                include: listInclude,
             });
 
             if (!product) {
@@ -684,7 +683,8 @@ export class ProductService implements IProductService {
                 );
             }
 
-            return this.mapToDetailDto(product);
+            const related = await this.findRandomRelated(product.id, 10);
+            return this.mapToDetailDto(product, related);
         } catch (error) {
             if (error instanceof HttpException) {
                 throw error;
@@ -758,42 +758,6 @@ export class ProductService implements IProductService {
         }
     }
 
-    private async syncRelated(
-        productId: string,
-        relatedProductIds: string[] | undefined
-    ): Promise<void> {
-        if (relatedProductIds === undefined) {
-            return;
-        }
-
-        const unique = [
-            ...new Set(relatedProductIds.filter(id => id && id !== productId)),
-        ];
-
-        await this.databaseService.productRelated.deleteMany({
-            where: { productId },
-        });
-
-        if (unique.length === 0) {
-            return;
-        }
-
-        const existing = await this.databaseService.product.findMany({
-            where: { id: { in: unique }, deletedAt: null },
-            select: { id: true },
-        });
-        const allowed = new Set(existing.map(p => p.id));
-
-        await this.databaseService.productRelated.createMany({
-            data: unique
-                .filter(id => allowed.has(id))
-                .map(relatedProductId => ({
-                    productId,
-                    relatedProductId,
-                })),
-        });
-    }
-
     async update(
         id: string,
         data: ProductUpdateDto
@@ -825,8 +789,8 @@ export class ProductService implements IProductService {
                 slug = await this.ensureUniqueSlug(generateSlug(data.slug), id);
             }
 
-            const { variants, relatedProductIds, ...rest } =
-                data as ProductUpdateDto & Record<string, unknown>;
+            const { variants, ...rest } = data as ProductUpdateDto &
+                Record<string, unknown>;
 
             const updateData: Prisma.ProductUpdateInput = {};
 
@@ -880,7 +844,6 @@ export class ProductService implements IProductService {
             ]);
 
             await this.syncVariants(id, variants);
-            await this.syncRelated(id, relatedProductIds);
 
             const product = await this.databaseService.product.findUnique({
                 where: { id },
@@ -1281,14 +1244,6 @@ export class ProductService implements IProductService {
             where: { id: variantId },
             data: { deletedAt: new Date() },
         });
-        return this.findOne(productId);
-    }
-
-    async setRelatedProducts(
-        productId: string,
-        relatedProductIds: string[]
-    ): Promise<ProductResponseDto> {
-        await this.syncRelated(productId, relatedProductIds);
         return this.findOne(productId);
     }
 }

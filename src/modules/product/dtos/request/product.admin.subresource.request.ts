@@ -1,12 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
     IsString,
-    IsUUID,
     IsOptional,
     IsBoolean,
     IsInt,
     Min,
-    IsArray,
     ValidateIf,
 } from 'class-validator';
 
@@ -64,16 +62,6 @@ export class AdminProductVariantUpdateDto {
     @IsInt()
     @Min(0)
     sortOrder?: number;
-}
-
-export class AdminProductRelatedSetDto {
-    @ApiProperty({
-        type: [String],
-        description: 'Related product IDs (replaces existing relations)',
-    })
-    @IsArray()
-    @IsUUID('4', { each: true })
-    relatedProductIds: string[];
 }
 
 export class AdminProductImageCreateDto {

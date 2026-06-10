@@ -778,14 +778,6 @@ function generateUniqueStockLines(
     return Array.from(set);
 }
 
-const STREAMING_RELATED: ProductSlug[] = ['netflix', 'disney-plus'];
-const FOOD_RELATED: ProductSlug[] = ['starbucks', 'doordash'];
-const FLIGHTS_RELATED: ProductSlug[] = [
-    'southwest-airlines',
-    'delta-air-lines',
-];
-const HOTELS_RELATED: ProductSlug[] = ['marriott-bonvoy', 'hilton-honors'];
-
 @Injectable()
 export class ProductsSeedService {
     constructor(
@@ -811,9 +803,6 @@ export class ProductsSeedService {
 
             const products = await this.createProducts(categories);
             this.logger.info(`Ensured ${products.length} products`);
-
-            await this.seedRelatedProducts();
-            this.logger.info('Related product links ensured');
 
             this.logger.info('Product seeding completed successfully');
         } catch (error) {
@@ -1000,42 +989,5 @@ export class ProductsSeedService {
                 data: { stockQuantity: availableCount },
             });
         }
-    }
-
-    private async seedRelatedProducts(): Promise<void> {
-        const slugToId = new Map<string, string>();
-        for (const def of PRODUCT_DEFS) {
-            const row = await this.databaseService.product.findUnique({
-                where: { slug: def.slug },
-            });
-            if (row) slugToId.set(def.slug, row.id);
-        }
-
-        const pairs: Array<{ productId: string; relatedProductId: string }> =
-            [];
-
-        const addCluster = (slugs: ProductSlug[]) => {
-            for (const a of slugs) {
-                for (const b of slugs) {
-                    if (a === b) continue;
-                    const idA = slugToId.get(a);
-                    const idB = slugToId.get(b);
-                    if (!idA || !idB) continue;
-                    pairs.push({ productId: idA, relatedProductId: idB });
-                }
-            }
-        };
-
-        addCluster(STREAMING_RELATED);
-        addCluster(FOOD_RELATED);
-        addCluster(FLIGHTS_RELATED);
-        addCluster(HOTELS_RELATED);
-
-        if (pairs.length === 0) return;
-
-        await this.databaseService.productRelated.createMany({
-            data: pairs,
-            skipDuplicates: true,
-        });
     }
 }
