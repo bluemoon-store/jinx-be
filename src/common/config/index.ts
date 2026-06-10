@@ -8,6 +8,7 @@ import RedisConfig from './redis.config';
 import ResendConfig from './resend.config';
 import SmtpConfig from './smtp.config';
 import SupabaseConfig from './supabase.config';
+import TurnstileConfig from './turnstile.config';
 
 export default [
     AppConfig,
@@ -20,4 +21,5 @@ export default [
     SmtpConfig,
     ResendConfig,
     PaymentGatewayConfig,
+    TurnstileConfig,
 ];

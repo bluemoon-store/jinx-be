@@ -1,6 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class UserLoginDto {
     @ApiProperty({
@@ -29,4 +29,11 @@ export class UserLoginDto {
     @IsString()
     @IsNotEmpty()
     public password: string;
+
+    @ApiPropertyOptional({
+        description: 'Cloudflare Turnstile token (verified server-side)',
+    })
+    @IsString()
+    @IsOptional()
+    public turnstileToken?: string;
 }

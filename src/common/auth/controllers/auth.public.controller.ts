@@ -18,6 +18,7 @@ import { PublicRoute } from 'src/common/request/decorators/request.public.decora
 import { AuthUser } from 'src/common/request/decorators/request.user.decorator';
 import { JwtAccessGuard } from 'src/common/request/guards/jwt.access.guard';
 import { JwtRefreshGuard } from 'src/common/request/guards/jwt.refresh.guard';
+import { TurnstileGuard } from 'src/common/request/guards/turnstile.guard';
 import { IAuthUser } from 'src/common/request/interfaces/request.interface';
 import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic.dto';
 import { UserGetProfileResponseDto } from 'src/modules/user/dtos/response/user.response';
@@ -70,6 +71,7 @@ export class AuthPublicController {
 
     @Post('login')
     @PublicRoute()
+    @UseGuards(TurnstileGuard)
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'User login',
@@ -153,6 +155,7 @@ export class AuthPublicController {
 
     @Post('signup')
     @PublicRoute()
+    @UseGuards(TurnstileGuard)
     @ApiOperation({ summary: 'User signup' })
     @DocResponse({
         serialization: AuthResponseDto,

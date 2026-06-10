@@ -13,6 +13,7 @@ import { AuthPublicController } from './controllers/auth.public.controller';
 import { JwtAccessStrategy } from './providers/access-jwt.strategy';
 import { JwtRefreshStrategy } from './providers/refresh-jwt.strategy';
 import { AuthService } from './services/auth.service';
+import { TurnstileService } from './services/turnstile.service';
 
 @Module({
     controllers: [AuthPublicController],
@@ -29,7 +30,17 @@ import { AuthService } from './services/auth.service';
             name: APP_BULL_QUEUES.NOTIFICATION,
         }),
     ],
-    providers: [AuthService, JwtAccessStrategy, JwtRefreshStrategy],
-    exports: [AuthService, JwtAccessStrategy, JwtRefreshStrategy],
+    providers: [
+        AuthService,
+        TurnstileService,
+        JwtAccessStrategy,
+        JwtRefreshStrategy,
+    ],
+    exports: [
+        AuthService,
+        TurnstileService,
+        JwtAccessStrategy,
+        JwtRefreshStrategy,
+    ],
 })
 export class AuthModule {}
