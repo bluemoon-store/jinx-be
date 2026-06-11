@@ -7,6 +7,8 @@
         "publicFound": "Public settings retrieved successfully",
         "landingFound": "Landing settings retrieved successfully",
         "landingUpdated": "Landing settings updated successfully",
+        "paymentFound": "Payment settings retrieved successfully",
+        "paymentUpdated": "Payment settings updated successfully",
         "emailValidityTested": "Email validity URL tested successfully"
     },
     "error": {

@@ -17,13 +17,20 @@ import {
 } from 'src/common/helper/interfaces/email.interface';
 import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic.dto';
 
+import {
+    PAYMENT_CRYPTO_CODES,
+    PAYMENT_GATEWAY_CODES,
+    PAYMENT_SETTINGS_CATEGORY,
+} from '../constants/payment-settings.constant';
 import { SettingsScheduleMaintenanceRequestDto } from '../dtos/request/settings.schedule-maintenance.request';
 import { SettingsUpdateGeneralRequestDto } from '../dtos/request/settings.update-general.request';
 import { SettingsUpdateLandingRequestDto } from '../dtos/request/settings.update-landing.request';
+import { SettingsUpdatePaymentRequestDto } from '../dtos/request/settings.update-payment.request';
 import { SettingsUpdateSocialRequestDto } from '../dtos/request/settings.update-social.request';
 import { SettingsEmailValidityTestResponseDto } from '../dtos/response/settings.email-validity-test.response';
 import { SettingsGeneralResponseDto } from '../dtos/response/settings.general.response';
 import { SettingsLandingResponseDto } from '../dtos/response/settings.landing.response';
+import { SettingsPaymentResponseDto } from '../dtos/response/settings.payment.response';
 import { SettingsPublicResponseDto } from '../dtos/response/settings.public.response';
 import { SettingsSocialResponseDto } from '../dtos/response/settings.social.response';
 
@@ -97,12 +104,13 @@ export class SettingsService {
     private async upsertSetting(
         key: string,
         category: string,
-        value: string | null
+        value: string | null,
+        isPublic = true
     ): Promise<void> {
         await this.databaseService.systemSettings.upsert({
             where: { key },
-            update: { value: value ?? '', category, isPublic: true },
-            create: { key, value: value ?? '', category, isPublic: true },
+            update: { value: value ?? '', category, isPublic },
+            create: { key, value: value ?? '', category, isPublic },
         });
     }
 
@@ -233,6 +241,121 @@ export class SettingsService {
             await this.cacheManager.del(LANDING_CACHE_KEY);
         }
         return this.getLanding();
+    }
+
+    private cryptoAddressKey(code: string): string {
+        return `payment_crypto_${code.toLowerCase()}_address`;
+    }
+
+    private cryptoEnabledKey(code: string): string {
+        return `payment_crypto_${code.toLowerCase()}_enabled`;
+    }
+
+    private gatewayApiKeyKey(code: string): string {
+        return `payment_gateway_${code.toLowerCase()}_api_key`;
+    }
+
+    private gatewayApiSecretKey(code: string): string {
+        return `payment_gateway_${code.toLowerCase()}_api_secret`;
+    }
+
+    private gatewayEnabledKey(code: string): string {
+        return `payment_gateway_${code.toLowerCase()}_enabled`;
+    }
+
+    // Missing key defaults to enabled so methods stay visible until toggled off.
+    private parseEnabled(value: string | undefined): boolean {
+        if (value == null) return true;
+        return value !== 'false';
+    }
+
+    async getPayment(): Promise<SettingsPaymentResponseDto> {
+        const rows = await this.databaseService.systemSettings.findMany({
+            where: { category: PAYMENT_SETTINGS_CATEGORY },
+            select: { key: true, value: true },
+        });
+        const byKey = new Map(rows.map(row => [row.key, row.value]));
+
+        return {
+            cryptocurrencies: PAYMENT_CRYPTO_CODES.map(code => ({
+                code,
+                address: this.toPublicNullable(
+                    byKey.get(this.cryptoAddressKey(code)) ?? null
+                ),
+                enabled: this.parseEnabled(
+                    byKey.get(this.cryptoEnabledKey(code))
+                ),
+            })),
+            gateways: PAYMENT_GATEWAY_CODES.map(code => ({
+                code,
+                apiKey: this.toPublicNullable(
+                    byKey.get(this.gatewayApiKeyKey(code)) ?? null
+                ),
+                apiSecret: this.toPublicNullable(
+                    byKey.get(this.gatewayApiSecretKey(code)) ?? null
+                ),
+                enabled: this.parseEnabled(
+                    byKey.get(this.gatewayEnabledKey(code))
+                ),
+            })),
+        };
+    }
+
+    async updatePayment(
+        payload: SettingsUpdatePaymentRequestDto
+    ): Promise<SettingsPaymentResponseDto> {
+        const allowedCrypto = new Set<string>(PAYMENT_CRYPTO_CODES);
+        const allowedGateway = new Set<string>(PAYMENT_GATEWAY_CODES);
+
+        for (const item of payload.cryptocurrencies ?? []) {
+            if (!allowedCrypto.has(item.code)) continue;
+            if (item.address !== undefined) {
+                await this.upsertSetting(
+                    this.cryptoAddressKey(item.code),
+                    PAYMENT_SETTINGS_CATEGORY,
+                    this.normalizeNullable(item.address),
+                    false
+                );
+            }
+            if (item.enabled !== undefined) {
+                await this.upsertSetting(
+                    this.cryptoEnabledKey(item.code),
+                    PAYMENT_SETTINGS_CATEGORY,
+                    item.enabled ? 'true' : 'false',
+                    false
+                );
+            }
+        }
+
+        for (const item of payload.gateways ?? []) {
+            if (!allowedGateway.has(item.code)) continue;
+            if (item.apiKey !== undefined) {
+                await this.upsertSetting(
+                    this.gatewayApiKeyKey(item.code),
+                    PAYMENT_SETTINGS_CATEGORY,
+                    this.normalizeNullable(item.apiKey),
+                    false
+                );
+            }
+            if (item.apiSecret !== undefined) {
+                await this.upsertSetting(
+                    this.gatewayApiSecretKey(item.code),
+                    PAYMENT_SETTINGS_CATEGORY,
+                    this.normalizeNullable(item.apiSecret),
+                    false
+                );
+            }
+            if (item.enabled !== undefined) {
+                await this.upsertSetting(
+                    this.gatewayEnabledKey(item.code),
+                    PAYMENT_SETTINGS_CATEGORY,
+                    item.enabled ? 'true' : 'false',
+                    false
+                );
+            }
+        }
+
+        return this.getPayment();
     }
 
     async getPublic(): Promise<SettingsPublicResponseDto> {

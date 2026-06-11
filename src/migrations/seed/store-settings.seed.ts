@@ -26,6 +26,54 @@ export class StoreSettingsSeedService {
     }
 
     private async seedSystemSettings(): Promise<void> {
+        const paymentCryptoCodes = [
+            'btc',
+            'eth',
+            'sol',
+            'usdt_trc20',
+            'usdt_erc20',
+            'ltc',
+            'bch',
+        ];
+        const paymentGatewayCodes = ['chime', 'cashapp'];
+
+        const paymentRows = [
+            ...paymentCryptoCodes.flatMap(code => [
+                {
+                    key: `payment_crypto_${code}_address`,
+                    category: 'payment',
+                    value: '',
+                    isPublic: false,
+                },
+                {
+                    key: `payment_crypto_${code}_enabled`,
+                    category: 'payment',
+                    value: 'true',
+                    isPublic: false,
+                },
+            ]),
+            ...paymentGatewayCodes.flatMap(code => [
+                {
+                    key: `payment_gateway_${code}_api_key`,
+                    category: 'payment',
+                    value: '',
+                    isPublic: false,
+                },
+                {
+                    key: `payment_gateway_${code}_api_secret`,
+                    category: 'payment',
+                    value: '',
+                    isPublic: false,
+                },
+                {
+                    key: `payment_gateway_${code}_enabled`,
+                    category: 'payment',
+                    value: 'true',
+                    isPublic: false,
+                },
+            ]),
+        ];
+
         const rows = [
             {
                 key: 'support_link',
@@ -45,6 +93,7 @@ export class StoreSettingsSeedService {
                 value: '',
                 isPublic: true,
             },
+            ...paymentRows,
         ];
 
         for (const row of rows) {

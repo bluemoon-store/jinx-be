@@ -1,0 +1,46 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Expose, Type } from 'class-transformer';
+
+export class SettingsPaymentCryptoResponseDto {
+    @ApiProperty({ example: 'BTC' })
+    @Expose()
+    code: string;
+
+    @ApiPropertyOptional({ nullable: true })
+    @Expose()
+    address: string | null;
+
+    @ApiProperty()
+    @Expose()
+    enabled: boolean;
+}
+
+export class SettingsPaymentGatewayResponseDto {
+    @ApiProperty({ example: 'CHIME' })
+    @Expose()
+    code: string;
+
+    @ApiPropertyOptional({ nullable: true })
+    @Expose()
+    apiKey: string | null;
+
+    @ApiPropertyOptional({ nullable: true })
+    @Expose()
+    apiSecret: string | null;
+
+    @ApiProperty()
+    @Expose()
+    enabled: boolean;
+}
+
+export class SettingsPaymentResponseDto {
+    @ApiProperty({ type: [SettingsPaymentCryptoResponseDto] })
+    @Expose()
+    @Type(() => SettingsPaymentCryptoResponseDto)
+    cryptocurrencies: SettingsPaymentCryptoResponseDto[];
+
+    @ApiProperty({ type: [SettingsPaymentGatewayResponseDto] })
+    @Expose()
+    @Type(() => SettingsPaymentGatewayResponseDto)
+    gateways: SettingsPaymentGatewayResponseDto[];
+}

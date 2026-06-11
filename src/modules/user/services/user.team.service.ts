@@ -34,9 +34,10 @@ export class UserTeamService {
     ) {}
 
     public async listTeamMembers() {
-        return this.databaseService.user.findMany({
+        const teamMembers = await this.databaseService.user.findMany({
             where: {
                 role: { notIn: [Role.USER, Role.SUPER_ADMIN] },
+                deletedAt: null,
             },
             select: {
                 id: true,
@@ -49,11 +50,14 @@ export class UserTeamService {
                 createdAt: true,
                 updatedAt: true,
                 deletedAt: true,
+                deactivatedAt: true,
                 invitationTokenExpiry: true,
                 invitedBy: true,
             },
             orderBy: [{ role: 'asc' }, { createdAt: 'desc' }],
         });
+
+        return teamMembers;
     }
 
     public async inviteTeamMember(
@@ -63,7 +67,9 @@ export class UserTeamService {
         const existing = await this.databaseService.user.findUnique({
             where: { email: payload.email },
         });
-        if (existing) {
+        // Only an active (non-deleted) account blocks the email. A soft-deleted
+        // row with the same email is revived below instead of rejected.
+        if (existing && existing.deletedAt === null) {
             throw new HttpException(
                 'user.error.userExists',
                 HttpStatus.CONFLICT
@@ -73,15 +79,15 @@ export class UserTeamService {
         const userNameTaken = await this.databaseService.user.findUnique({
             where: { userName: payload.userName },
         });
-        if (userNameTaken) {
+        if (userNameTaken && userNameTaken.deletedAt === null) {
             throw new HttpException(
                 'user.error.userNameExists',
                 HttpStatus.CONFLICT
             );
         }
 
-        const inviter = await this.databaseService.user.findUnique({
-            where: { id: invitedByUserId },
+        const inviter = await this.databaseService.user.findFirst({
+            where: { id: invitedByUserId, deletedAt: null },
         });
         if (!inviter) {
             throw new HttpException(
@@ -99,21 +105,44 @@ export class UserTeamService {
         const hashedTemporaryPassword =
             await this.helperEncryptionService.createHash(temporaryPassword);
 
+        // A soft-deleted account with this email is revived rather than
+        // re-created, since the email/userName unique constraints still cover
+        // deleted rows at the DB level.
+        const reviveTargetId =
+            existing && existing.deletedAt !== null ? existing.id : null;
+
         let created;
         try {
-            created = await this.databaseService.user.create({
-                data: {
-                    email: payload.email,
-                    role: payload.role,
-                    userName: payload.userName,
-                    password: hashedTemporaryPassword,
-                    firstName: payload.name?.trim() || null,
-                    isVerified: false,
-                    invitedBy: invitedByUserId,
-                    invitationToken,
-                    invitationTokenExpiry,
-                },
-            });
+            created = reviveTargetId
+                ? await this.databaseService.user.update({
+                      where: { id: reviveTargetId },
+                      data: {
+                          email: payload.email,
+                          role: payload.role,
+                          userName: payload.userName,
+                          password: hashedTemporaryPassword,
+                          firstName: payload.name?.trim() || null,
+                          isVerified: false,
+                          invitedBy: invitedByUserId,
+                          invitationToken,
+                          invitationTokenExpiry,
+                          deletedAt: null,
+                          deactivatedAt: null,
+                      },
+                  })
+                : await this.databaseService.user.create({
+                      data: {
+                          email: payload.email,
+                          role: payload.role,
+                          userName: payload.userName,
+                          password: hashedTemporaryPassword,
+                          firstName: payload.name?.trim() || null,
+                          isVerified: false,
+                          invitedBy: invitedByUserId,
+                          invitationToken,
+                          invitationTokenExpiry,
+                      },
+                  });
         } catch (error) {
             if (
                 error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -161,13 +190,13 @@ export class UserTeamService {
 
         const data: {
             role?: Role;
-            deletedAt?: Date | null;
+            deactivatedAt?: Date | null;
         } = {};
         if (payload.role) {
             data.role = payload.role;
         }
         if (payload.status) {
-            data.deletedAt =
+            data.deactivatedAt =
                 payload.status === TeamMemberStatus.DEACTIVATED
                     ? new Date()
                     : null;

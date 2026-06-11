@@ -15,10 +15,12 @@ import { SettingsScheduleMaintenanceRequestDto } from '../dtos/request/settings.
 import { SettingsTestEmailValidityRequestDto } from '../dtos/request/settings.test-email-validity.request';
 import { SettingsUpdateGeneralRequestDto } from '../dtos/request/settings.update-general.request';
 import { SettingsUpdateLandingRequestDto } from '../dtos/request/settings.update-landing.request';
+import { SettingsUpdatePaymentRequestDto } from '../dtos/request/settings.update-payment.request';
 import { SettingsUpdateSocialRequestDto } from '../dtos/request/settings.update-social.request';
 import { SettingsEmailValidityTestResponseDto } from '../dtos/response/settings.email-validity-test.response';
 import { SettingsGeneralResponseDto } from '../dtos/response/settings.general.response';
 import { SettingsLandingResponseDto } from '../dtos/response/settings.landing.response';
+import { SettingsPaymentResponseDto } from '../dtos/response/settings.payment.response';
 import { SettingsSocialResponseDto } from '../dtos/response/settings.social.response';
 import { SettingsService } from '../services/settings.service';
 
@@ -124,6 +126,39 @@ export class SettingsAdminController {
         @Body() payload: SettingsUpdateLandingRequestDto
     ): Promise<SettingsLandingResponseDto> {
         return this.settingsService.updateLanding(payload);
+    }
+
+    @Get('payment')
+    @AllowedRoles(READ_ADMIN_ROLES)
+    @ApiBearerAuth('accessToken')
+    @ApiOperation({ summary: 'Get admin payment settings' })
+    @DocResponse({
+        serialization: SettingsPaymentResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'settings.success.paymentFound',
+    })
+    async getPayment(): Promise<SettingsPaymentResponseDto> {
+        return this.settingsService.getPayment();
+    }
+
+    @Put('payment')
+    @AuditLog({
+        action: 'settings.payment.update',
+        category: ActivityLogCategory.SETTINGS,
+        resourceType: 'SystemSettings',
+    })
+    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @ApiBearerAuth('accessToken')
+    @ApiOperation({ summary: 'Update admin payment settings' })
+    @DocResponse({
+        serialization: SettingsPaymentResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'settings.success.paymentUpdated',
+    })
+    async updatePayment(
+        @Body() payload: SettingsUpdatePaymentRequestDto
+    ): Promise<SettingsPaymentResponseDto> {
+        return this.settingsService.updatePayment(payload);
     }
 
     @Post('test-email-validity')
