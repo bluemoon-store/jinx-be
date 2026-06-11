@@ -16,6 +16,7 @@ import {
 } from 'src/common/helper/interfaces/email.interface';
 import { HelperEncryptionService } from 'src/common/helper/services/helper.encryption.service';
 import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic.dto';
+import { ActivityLogEmitterService } from 'src/modules/activity-log/services/activity-log.emitter.service';
 
 import { TeamInviteRequestDto } from '../dtos/request/team.invite.request';
 import {
@@ -29,6 +30,7 @@ export class UserTeamService {
         private readonly databaseService: DatabaseService,
         private readonly helperEncryptionService: HelperEncryptionService,
         private readonly configService: ConfigService,
+        private readonly activityLogEmitter: ActivityLogEmitterService,
         @InjectQueue(APP_BULL_QUEUES.EMAIL)
         private readonly emailQueue: Queue
     ) {}
@@ -165,6 +167,17 @@ export class UserTeamService {
             throw error;
         }
 
+        this.activityLogEmitter.setAuditResourceId(created.id);
+        this.activityLogEmitter.captureAfter({
+            after: {
+                email: created.email,
+                userName: created.userName,
+                role: created.role,
+                status: 'INVITED',
+            },
+            resourceLabel: created.email,
+        });
+
         await this.sendInvitationEmail(
             created.email,
             payload.role,
@@ -202,9 +215,27 @@ export class UserTeamService {
                     : null;
         }
 
+        this.activityLogEmitter.captureBefore({
+            before: {
+                role: user.role,
+                deactivatedAt: user.deactivatedAt,
+            },
+        });
+
         await this.databaseService.user.update({
             where: { id },
             data,
+        });
+
+        this.activityLogEmitter.captureAfter({
+            after: {
+                role: data.role ?? user.role,
+                deactivatedAt:
+                    data.deactivatedAt !== undefined
+                        ? data.deactivatedAt
+                        : user.deactivatedAt,
+            },
+            resourceLabel: user.email,
         });
 
         return {
@@ -224,11 +255,21 @@ export class UserTeamService {
             );
         }
 
+        const now = new Date();
+        this.activityLogEmitter.captureBefore({
+            before: { deletedAt: null },
+        });
+
         await this.databaseService.user.update({
             where: { id },
             data: {
-                deletedAt: new Date(),
+                deletedAt: now,
             },
+        });
+
+        this.activityLogEmitter.captureAfter({
+            after: { deletedAt: now },
+            resourceLabel: user.email,
         });
 
         return {
@@ -264,6 +305,11 @@ export class UserTeamService {
                 invitationTokenExpiry,
                 password: hashedTemporaryPassword,
             },
+        });
+
+        this.activityLogEmitter.captureAfter({
+            after: { invitationResent: true },
+            resourceLabel: user.email,
         });
 
         await this.sendInvitationEmail(

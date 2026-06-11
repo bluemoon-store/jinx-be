@@ -31,6 +31,9 @@ export const REVENUE_VIEW_ROLES: Role[] = [Role.OWNER];
 /** Wallet/balance operation roles (owner-only). */
 export const FINANCIAL_OPS_ROLES: Role[] = [Role.OWNER];
 
+/** Store settings access — owner-only (SUPER_ADMIN bypasses via RolesGuard). */
+export const SETTINGS_ACCESS_ROLES: Role[] = [Role.OWNER];
+
 /** Read-only alias for staff admin endpoints. */
 export const READ_ADMIN_ROLES: Role[] = [...ADMIN_ROLES];
 

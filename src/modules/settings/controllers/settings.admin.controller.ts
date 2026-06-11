@@ -3,10 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ActivityLogCategory } from '@prisma/client';
 
 import { DocResponse } from 'src/common/doc/decorators/doc.response.decorator';
-import {
-    READ_ADMIN_ROLES,
-    STAFF_OPERATIONS_ROLES,
-} from 'src/common/request/constants/roles.constant';
+import { SETTINGS_ACCESS_ROLES } from 'src/common/request/constants/roles.constant';
 import { AllowedRoles } from 'src/common/request/decorators/request.role.decorator';
 import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic.dto';
 import { AuditLog } from 'src/modules/activity-log/decorators/audit-log.decorator';
@@ -30,7 +27,7 @@ export class SettingsAdminController {
     constructor(private readonly settingsService: SettingsService) {}
 
     @Get('general')
-    @AllowedRoles(READ_ADMIN_ROLES)
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Get admin general settings' })
     @DocResponse({
@@ -48,7 +45,7 @@ export class SettingsAdminController {
         category: ActivityLogCategory.SETTINGS,
         resourceType: 'SystemSettings',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Update admin general settings' })
     @DocResponse({
@@ -63,7 +60,7 @@ export class SettingsAdminController {
     }
 
     @Get('social')
-    @AllowedRoles(READ_ADMIN_ROLES)
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Get admin social settings' })
     @DocResponse({
@@ -81,7 +78,7 @@ export class SettingsAdminController {
         category: ActivityLogCategory.SETTINGS,
         resourceType: 'SystemSettings',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Update admin social settings' })
     @DocResponse({
@@ -96,7 +93,7 @@ export class SettingsAdminController {
     }
 
     @Get('landing')
-    @AllowedRoles(READ_ADMIN_ROLES)
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Get admin landing-page text settings' })
     @DocResponse({
@@ -114,7 +111,7 @@ export class SettingsAdminController {
         category: ActivityLogCategory.SETTINGS,
         resourceType: 'SystemSettings',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Update admin landing-page text settings' })
     @DocResponse({
@@ -129,7 +126,7 @@ export class SettingsAdminController {
     }
 
     @Get('payment')
-    @AllowedRoles(READ_ADMIN_ROLES)
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Get admin payment settings' })
     @DocResponse({
@@ -147,7 +144,7 @@ export class SettingsAdminController {
         category: ActivityLogCategory.SETTINGS,
         resourceType: 'SystemSettings',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Update admin payment settings' })
     @DocResponse({
@@ -162,7 +159,7 @@ export class SettingsAdminController {
     }
 
     @Post('test-email-validity')
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Test external email validity URL' })
     @DocResponse({
@@ -182,7 +179,7 @@ export class SettingsAdminController {
         category: ActivityLogCategory.SETTINGS,
         resourceType: 'SystemSettings',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({
         summary: 'Broadcast a scheduled-maintenance email to all active users',
