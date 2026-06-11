@@ -106,6 +106,7 @@ export class AuthPublicController {
 
     @Post('admin/login')
     @PublicRoute()
+    @UseGuards(TurnstileGuard)
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Admin login (step 1)',

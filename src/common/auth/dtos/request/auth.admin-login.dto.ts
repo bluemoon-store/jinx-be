@@ -1,6 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 /** Admin panel login (step 1). On success an email OTP is sent; complete via /auth/admin/verify-otp. */
 export class AdminLoginDto {
@@ -26,4 +26,11 @@ export class AdminLoginDto {
     @IsString()
     @IsNotEmpty()
     public password: string;
+
+    @ApiPropertyOptional({
+        description: 'Cloudflare Turnstile token (verified server-side)',
+    })
+    @IsString()
+    @IsOptional()
+    public turnstileToken?: string;
 }
