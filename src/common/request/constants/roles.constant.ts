@@ -11,6 +11,13 @@ export const ADMIN_ROLES: Role[] = [
 /** Product/order/user/coupon/drop mutations for core operations staff. */
 export const STAFF_OPERATIONS_ROLES: Role[] = [Role.OWNER, Role.MOD];
 
+/** Roles allowed to create/manage products. Alliance manages only its own (ownership enforced in service). */
+export const PRODUCT_CREATE_ROLES: Role[] = [
+    Role.OWNER,
+    Role.MOD,
+    Role.ALLIANCE,
+];
+
 /** Ticket and refund handling roles. */
 export const SUPPORT_HANDLING_ROLES: Role[] = [
     Role.OWNER,

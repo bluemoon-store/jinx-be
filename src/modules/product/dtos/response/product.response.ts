@@ -336,6 +336,15 @@ export class ProductResponseDto implements Product {
     deletedAt: Date | null;
 
     @ApiPropertyOptional({
+        nullable: true,
+        description: 'ID of the user who created the product',
+    })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    createdById: string | null;
+
+    @ApiPropertyOptional({
         type: CategoryResponseDto,
     })
     @Expose()
@@ -411,6 +420,15 @@ export class ProductListResponseDto extends ProductResponseDto {
     @IsArray()
     @IsString({ each: true })
     tags: string[];
+
+    @ApiPropertyOptional({
+        description: 'Display name of the user who created the product',
+        nullable: true,
+    })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    createdByName?: string | null;
 }
 
 export class ProductDetailResponseDto extends ProductListResponseDto {

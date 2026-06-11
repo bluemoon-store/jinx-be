@@ -24,6 +24,7 @@ jest.mock('src/modules/crypto-payment/services/system-wallet.service', () => ({
 import { ROLES_DECORATOR_KEY } from 'src/common/request/constants/request.constant';
 import {
     FINANCIAL_OPS_ROLES,
+    PRODUCT_CREATE_ROLES,
     READ_ADMIN_ROLES,
     STAFF_OPERATIONS_ROLES,
     STOCK_CONTRIBUTOR_ROLES,
@@ -110,11 +111,22 @@ describe('Admin RBAC controller metadata', () => {
             }
 
             for (const methodName of [
-                'create',
                 'createCategory',
                 'updateCategory',
                 'deleteCategory',
                 'toggleCategoryActive',
+            ]) {
+                expectMethodRoles(
+                    ProductAdminController,
+                    methodName,
+                    STAFF_OPERATIONS_ROLES
+                );
+            }
+
+            // Product create/mutations are open to Alliance (ownership enforced
+            // in the service), so they use the wider PRODUCT_CREATE_ROLES set.
+            for (const methodName of [
+                'create',
                 'addVariant',
                 'updateVariant',
                 'deleteVariant',
@@ -129,7 +141,7 @@ describe('Admin RBAC controller metadata', () => {
                 expectMethodRoles(
                     ProductAdminController,
                     methodName,
-                    STAFF_OPERATIONS_ROLES
+                    PRODUCT_CREATE_ROLES
                 );
             }
         });
@@ -368,7 +380,7 @@ describe('Admin RBAC controller metadata', () => {
     describe('Representative role matrix', () => {
         it('allows owner everywhere and super admin through the guard bypass', () => {
             for (const [controller, methodName, expectedRoles] of [
-                [ProductAdminController, 'create', STAFF_OPERATIONS_ROLES],
+                [ProductAdminController, 'create', PRODUCT_CREATE_ROLES],
                 [OrderAdminController, 'refundOrder', SUPPORT_HANDLING_ROLES],
                 [WalletAdminController, 'addBalance', FINANCIAL_OPS_ROLES],
                 [ActivityLogAdminController, 'list', OWNER_ONLY_ROLES],

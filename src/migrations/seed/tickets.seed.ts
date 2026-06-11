@@ -137,7 +137,7 @@ export class TicketsSeedService {
                 priority: TicketPriority.LOW,
                 assign: false,
                 messagePairs: [
-                    'Will Netflix cards restock this week?',
+                    'Will Southwest cards restock this week?',
                     'We expect restock mid-week; I will notify you here.',
                     'Great, please ping when live.',
                 ],

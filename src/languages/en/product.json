@@ -44,6 +44,7 @@
         "addImageFailed": "Failed to add image",
         "imageNotFound": "Image not found",
         "removeImageFailed": "Failed to remove image",
-        "setPrimaryImageFailed": "Failed to set primary image"
+        "setPrimaryImageFailed": "Failed to set primary image",
+        "notOwner": "You can only manage products you created"
     }
 }

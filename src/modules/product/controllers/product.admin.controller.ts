@@ -22,10 +22,13 @@ import { DocResponse } from 'src/common/doc/decorators/doc.response.decorator';
 import { DocGenericResponse } from 'src/common/doc/decorators/doc.generic.decorator';
 import { DocPaginatedResponse } from 'src/common/doc/decorators/doc.paginated.decorator';
 import {
+    PRODUCT_CREATE_ROLES,
     READ_ADMIN_ROLES,
     STAFF_OPERATIONS_ROLES,
 } from 'src/common/request/constants/roles.constant';
 import { AllowedRoles } from 'src/common/request/decorators/request.role.decorator';
+import { AuthUser } from 'src/common/request/decorators/request.user.decorator';
+import { IAuthUser } from 'src/common/request/interfaces/request.interface';
 import { QueryTransformPipe } from 'src/common/request/pipes/query-transform.pipe';
 import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic.dto';
 
@@ -67,7 +70,7 @@ export class ProductAdminController {
         category: ActivityLogCategory.PRODUCT,
         resourceType: 'Product',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(PRODUCT_CREATE_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Create product' })
     @DocResponse({
@@ -76,9 +79,10 @@ export class ProductAdminController {
         messageKey: 'product.success.created',
     })
     public async create(
-        @Body() payload: ProductCreateDto
+        @Body() payload: ProductCreateDto,
+        @AuthUser() user: IAuthUser
     ): Promise<ProductResponseDto> {
-        return this.productService.create(payload);
+        return this.productService.create(payload, user.userId);
     }
 
     @Get()
@@ -96,7 +100,8 @@ export class ProductAdminController {
                 booleanFields: ['isActive', 'isHot', 'isNew', 'isRestocked'],
             })
         )
-        query: ProductListQueryDto
+        query: ProductListQueryDto,
+        @AuthUser() user: IAuthUser
     ): Promise<ApiPaginatedDataDto<ProductListResponseDto>> {
         return this.productService.findAll({
             page: query.page,
@@ -107,6 +112,8 @@ export class ProductAdminController {
             isHot: query.isHot,
             isNew: query.isNew,
             isRestocked: query.isRestocked,
+            requesterId: user.userId,
+            requesterRole: user.role,
         });
     }
 
@@ -120,9 +127,13 @@ export class ProductAdminController {
         messageKey: 'product.success.search',
     })
     public async search(
-        @Query() query: ProductSearchDto
+        @Query() query: ProductSearchDto,
+        @AuthUser() user: IAuthUser
     ): Promise<ApiPaginatedDataDto<ProductListResponseDto>> {
-        return this.productService.search(query);
+        return this.productService.search(query, {
+            requesterId: user.userId,
+            requesterRole: user.role,
+        });
     }
 
     // Categories (must be registered before :id routes)
@@ -261,7 +272,7 @@ export class ProductAdminController {
         resourceType: 'ProductVariant',
         resourceIdParam: 'id',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(PRODUCT_CREATE_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Add product variant' })
     @DocResponse({
@@ -271,8 +282,10 @@ export class ProductAdminController {
     })
     public async addVariant(
         @Param('id') productId: string,
-        @Body() payload: AdminProductVariantCreateDto
+        @Body() payload: AdminProductVariantCreateDto,
+        @AuthUser() user: IAuthUser
     ): Promise<ProductResponseDto> {
+        await this.productService.assertCanMutate(productId, user);
         return this.productService.addVariant(productId, payload);
     }
 
@@ -283,7 +296,7 @@ export class ProductAdminController {
         resourceType: 'ProductVariant',
         resourceIdParam: 'variantId',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(PRODUCT_CREATE_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Update product variant' })
     @DocResponse({
@@ -294,8 +307,10 @@ export class ProductAdminController {
     public async updateVariant(
         @Param('id') productId: string,
         @Param('variantId') variantId: string,
-        @Body() payload: AdminProductVariantUpdateDto
+        @Body() payload: AdminProductVariantUpdateDto,
+        @AuthUser() user: IAuthUser
     ): Promise<ProductResponseDto> {
+        await this.productService.assertCanMutate(productId, user);
         return this.productService.updateVariant(productId, variantId, payload);
     }
 
@@ -306,7 +321,7 @@ export class ProductAdminController {
         resourceType: 'ProductVariant',
         resourceIdParam: 'variantId',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(PRODUCT_CREATE_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Remove product variant (soft delete)' })
     @DocResponse({
@@ -316,8 +331,10 @@ export class ProductAdminController {
     })
     public async deleteVariant(
         @Param('id') productId: string,
-        @Param('variantId') variantId: string
+        @Param('variantId') variantId: string,
+        @AuthUser() user: IAuthUser
     ): Promise<ProductResponseDto> {
+        await this.productService.assertCanMutate(productId, user);
         return this.productService.deleteVariant(productId, variantId);
     }
 
@@ -332,8 +349,14 @@ export class ProductAdminController {
         httpStatus: HttpStatus.OK,
         messageKey: 'product.success.productFound',
     })
-    public async getById(@Param('id') id: string): Promise<ProductResponseDto> {
-        return this.productService.findOne(id);
+    public async getById(
+        @Param('id') id: string,
+        @AuthUser() user: IAuthUser
+    ): Promise<ProductResponseDto> {
+        return this.productService.findOne(id, {
+            requesterId: user.userId,
+            requesterRole: user.role,
+        });
     }
 
     @Put(':id')
@@ -343,7 +366,7 @@ export class ProductAdminController {
         resourceType: 'Product',
         resourceIdParam: 'id',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(PRODUCT_CREATE_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Update product' })
     @DocResponse({
@@ -353,8 +376,10 @@ export class ProductAdminController {
     })
     public async update(
         @Param('id') id: string,
-        @Body() payload: ProductUpdateDto
+        @Body() payload: ProductUpdateDto,
+        @AuthUser() user: IAuthUser
     ): Promise<ProductResponseDto> {
+        await this.productService.assertCanMutate(id, user);
         return this.productService.update(id, payload);
     }
 
@@ -365,7 +390,7 @@ export class ProductAdminController {
         resourceType: 'Product',
         resourceIdParam: 'id',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(PRODUCT_CREATE_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Delete product' })
     @DocGenericResponse({
@@ -373,8 +398,10 @@ export class ProductAdminController {
         messageKey: 'product.success.productDeleted',
     })
     public async delete(
-        @Param('id') id: string
+        @Param('id') id: string,
+        @AuthUser() user: IAuthUser
     ): Promise<ApiGenericResponseDto> {
+        await this.productService.assertCanMutate(id, user);
         return this.productService.delete(id);
     }
 
@@ -385,7 +412,7 @@ export class ProductAdminController {
         resourceType: 'Product',
         resourceIdParam: 'id',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(PRODUCT_CREATE_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Update product stock' })
     @DocResponse({
@@ -395,8 +422,10 @@ export class ProductAdminController {
     })
     public async updateStock(
         @Param('id') id: string,
-        @Body('stockQuantity') stockQuantity: number
+        @Body('stockQuantity') stockQuantity: number,
+        @AuthUser() user: IAuthUser
     ): Promise<ProductResponseDto> {
+        await this.productService.assertCanMutate(id, user);
         return this.productService.updateStock(id, stockQuantity);
     }
 
@@ -407,7 +436,7 @@ export class ProductAdminController {
         resourceType: 'Product',
         resourceIdParam: 'id',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(PRODUCT_CREATE_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Toggle product active status' })
     @DocResponse({
@@ -416,8 +445,10 @@ export class ProductAdminController {
         messageKey: 'product.success.activeToggled',
     })
     public async toggleActive(
-        @Param('id') id: string
+        @Param('id') id: string,
+        @AuthUser() user: IAuthUser
     ): Promise<ProductResponseDto> {
+        await this.productService.assertCanMutate(id, user);
         return this.productService.toggleActive(id);
     }
 
@@ -428,7 +459,7 @@ export class ProductAdminController {
         resourceType: 'Product',
         resourceIdParam: 'id',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(PRODUCT_CREATE_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Add image to product' })
     @DocResponse({
@@ -438,8 +469,10 @@ export class ProductAdminController {
     })
     public async addImage(
         @Param('id') productId: string,
-        @Body() payload: AdminProductImageCreateDto
+        @Body() payload: AdminProductImageCreateDto,
+        @AuthUser() user: IAuthUser
     ): Promise<ProductResponseDto> {
+        await this.productService.assertCanMutate(productId, user);
         const imageKey = payload.key ?? payload.imageKey;
         if (!imageKey && !payload.url) {
             throw new BadRequestException('imageKey, key, or url is required');
@@ -459,7 +492,7 @@ export class ProductAdminController {
         resourceType: 'ProductImage',
         resourceIdParam: 'imageId',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(PRODUCT_CREATE_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Remove image from product' })
     @DocResponse({
@@ -469,8 +502,10 @@ export class ProductAdminController {
     })
     public async removeImage(
         @Param('id') productId: string,
-        @Param('imageId') imageId: string
+        @Param('imageId') imageId: string,
+        @AuthUser() user: IAuthUser
     ): Promise<ProductResponseDto> {
+        await this.productService.assertCanMutate(productId, user);
         return this.productService.removeImage(productId, imageId);
     }
 
@@ -481,7 +516,7 @@ export class ProductAdminController {
         resourceType: 'ProductImage',
         resourceIdParam: 'imageId',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(PRODUCT_CREATE_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Set image as primary' })
     @DocResponse({
@@ -491,8 +526,10 @@ export class ProductAdminController {
     })
     public async setPrimaryImage(
         @Param('id') productId: string,
-        @Param('imageId') imageId: string
+        @Param('imageId') imageId: string,
+        @AuthUser() user: IAuthUser
     ): Promise<ProductResponseDto> {
+        await this.productService.assertCanMutate(productId, user);
         return this.productService.setPrimaryImage(productId, imageId);
     }
 }

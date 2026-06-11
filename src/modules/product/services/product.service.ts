@@ -1,6 +1,13 @@
-import { HttpStatus, Injectable, HttpException } from '@nestjs/common';
+import {
+    ForbiddenException,
+    HttpStatus,
+    Injectable,
+    HttpException,
+} from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { Prisma, ProductType } from '@prisma/client';
+import { Prisma, ProductType, Role } from '@prisma/client';
+
+import { IAuthUser } from 'src/common/request/interfaces/request.interface';
 
 import { DatabaseService } from 'src/common/database/services/database.service';
 import { SupabaseStorageService } from 'src/common/storage/services/supabase.storage.service';
@@ -54,6 +61,15 @@ const listInclude = {
             },
         },
     },
+    creator: {
+        select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            userName: true,
+            email: true,
+        },
+    },
 } satisfies Prisma.ProductInclude;
 
 const adminInclude = {
@@ -99,12 +115,23 @@ export class ProductService implements IProductService {
                     soldCount: _count?.orderItems ?? 0,
                 };
             });
+        const creator = product.creator;
+        const createdByName = creator
+            ? [creator.firstName, creator.lastName]
+                  .filter(Boolean)
+                  .join(' ')
+                  .trim() ||
+              creator.userName ||
+              creator.email
+            : null;
         return {
             ...product,
             variants,
             primaryImageUrl,
             fromPrice,
             tags,
+            createdById: product.createdById ?? null,
+            createdByName,
         } as ProductListResponseDto;
     }
 
@@ -195,10 +222,17 @@ export class ProductService implements IProductService {
             isNew?: boolean;
             isRestocked?: boolean;
             type?: ProductType;
+            requesterId?: string;
+            requesterRole?: Role;
         },
         base: Prisma.ProductWhereInput = { deletedAt: null }
     ): Prisma.ProductWhereInput {
         const where: Prisma.ProductWhereInput = { ...base };
+
+        // Alliance only sees products they created; other roles see everything.
+        if (options.requesterRole === Role.ALLIANCE && options.requesterId) {
+            where.createdById = options.requesterId;
+        }
 
         if (options.categoryId) {
             where.categoryId = options.categoryId;
@@ -389,7 +423,10 @@ export class ProductService implements IProductService {
         };
     }
 
-    async create(data: ProductCreateDto): Promise<ProductResponseDto> {
+    async create(
+        data: ProductCreateDto,
+        createdById?: string
+    ): Promise<ProductResponseDto> {
         try {
             const category =
                 await this.databaseService.productCategory.findFirst({
@@ -445,6 +482,7 @@ export class ProductService implements IProductService {
                     redeemProcess: data.redeemProcess,
                     warrantyText: data.warrantyText,
                     warrantyMinutes: data.warrantyMinutes ?? 15,
+                    createdById: createdById ?? null,
                     variants: data.variants?.length
                         ? {
                               create: data.variants.map((v, i) => ({
@@ -515,6 +553,8 @@ export class ProductService implements IProductService {
         type?: ProductType;
         sortBy?: string;
         sortOrder?: SortOrder;
+        requesterId?: string;
+        requesterRole?: Role;
     }): Promise<ApiPaginatedDataDto<ProductListResponseDto>> {
         try {
             const where = this.buildListWhere({
@@ -525,6 +565,8 @@ export class ProductService implements IProductService {
                 isNew: options?.isNew,
                 isRestocked: options?.isRestocked,
                 type: options?.type,
+                requesterId: options?.requesterId,
+                requesterRole: options?.requesterRole,
             });
 
             const orderBy = this.resolveListOrderBy({
@@ -556,7 +598,8 @@ export class ProductService implements IProductService {
     }
 
     async search(
-        query: ProductSearchDto
+        query: ProductSearchDto,
+        requester?: { requesterId?: string; requesterRole?: Role }
     ): Promise<ApiPaginatedDataDto<ProductListResponseDto>> {
         try {
             const where = this.buildListWhere({
@@ -567,6 +610,8 @@ export class ProductService implements IProductService {
                 isNew: query.isNew,
                 isRestocked: query.isRestocked,
                 type: query.type,
+                requesterId: requester?.requesterId,
+                requesterRole: requester?.requesterRole,
             });
 
             if (query.minPrice !== undefined || query.maxPrice !== undefined) {
@@ -636,7 +681,10 @@ export class ProductService implements IProductService {
         }
     }
 
-    async findOne(id: string): Promise<ProductResponseDto> {
+    async findOne(
+        id: string,
+        requester?: { requesterId?: string; requesterRole?: Role }
+    ): Promise<ProductResponseDto> {
         try {
             const product = await this.databaseService.product.findFirst({
                 where: {
@@ -653,6 +701,17 @@ export class ProductService implements IProductService {
                 );
             }
 
+            // Alliance may only view products they created; hide others as 404.
+            if (
+                requester?.requesterRole === Role.ALLIANCE &&
+                product.createdById !== requester.requesterId
+            ) {
+                throw new HttpException(
+                    'product.error.productNotFound',
+                    HttpStatus.NOT_FOUND
+                );
+            }
+
             return this.mapToAdminDto(product);
         } catch (error) {
             if (error instanceof HttpException) {
@@ -663,6 +722,30 @@ export class ProductService implements IProductService {
                 'product.error.findProductFailed',
                 HttpStatus.INTERNAL_SERVER_ERROR
             );
+        }
+    }
+
+    /**
+     * Ensures the actor may mutate this product. Alliance can only mutate
+     * products they created; other roles are unrestricted. Throws 404 if the
+     * product is missing and 403 if an Alliance user targets someone else's product.
+     */
+    async assertCanMutate(productId: string, user: IAuthUser): Promise<void> {
+        if (user.role !== Role.ALLIANCE) {
+            return;
+        }
+        const product = await this.databaseService.product.findFirst({
+            where: { id: productId, deletedAt: null },
+            select: { createdById: true },
+        });
+        if (!product) {
+            throw new HttpException(
+                'product.error.productNotFound',
+                HttpStatus.NOT_FOUND
+            );
+        }
+        if (product.createdById !== user.userId) {
+            throw new ForbiddenException('product.error.notOwner');
         }
     }
 
