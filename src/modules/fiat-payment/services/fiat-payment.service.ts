@@ -19,6 +19,10 @@ import {
 
 import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { DatabaseService } from 'src/common/database/services/database.service';
+import {
+    ORDER_CONFIRMED_EMAIL_INCLUDE,
+    buildOrderConfirmedEmailData,
+} from 'src/common/email/order-confirmed-email.builder';
 import { EMAIL_TEMPLATES } from 'src/common/email/enums/email-template.enum';
 import {
     IOrderConfirmedPayload,
@@ -534,25 +538,21 @@ export class FiatPaymentService {
         try {
             const order = await this.databaseService.order.findUnique({
                 where: { id: orderId },
-                include: { user: true },
+                include: ORDER_CONFIRMED_EMAIL_INCLUDE,
             });
             if (!order || !order.user) return;
 
             const frontendUrl =
                 this.configService.get<string>('app.frontendUrl') ??
                 'http://localhost:3000';
-            const dashboardLink = `${frontendUrl.replace(/\/$/, '')}/orders/${order.id}`;
-            const formatted = this.formatUsd(amountUsd);
-            const completedAt = order.completedAt ?? new Date();
+            const numeric = Number(amountUsd);
 
             this.emailQueue.add(EMAIL_TEMPLATES.ORDER_CONFIRMED, {
-                data: {
-                    order_id: order.orderNumber,
-                    payment_method: gateway,
-                    amount: formatted,
-                    date: completedAt.toISOString().slice(0, 10),
-                    dashboard_link: dashboardLink,
-                },
+                data: buildOrderConfirmedEmailData(order, {
+                    paymentMethod: gateway,
+                    totalAmountUsd: Number.isFinite(numeric) ? numeric : 0,
+                    frontendUrl,
+                }),
                 toEmails: [order.user.email],
             } as ISendEmailBasePayload<IOrderConfirmedPayload>);
         } catch (error) {

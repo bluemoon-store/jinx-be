@@ -46,6 +46,14 @@ export interface IAdminPasswordChangedPayload {
 
 export type IPasswordChangedPayload = Record<string, never>;
 
+export interface IOrderConfirmedLineItem {
+    name: string;
+    variant?: string | null;
+    quantity: number;
+    unit_price: string;
+    line_total: string;
+}
+
 export interface IOrderConfirmedPayload {
     order_id: string;
     payment_method: string;
@@ -54,6 +62,12 @@ export interface IOrderConfirmedPayload {
     dashboard_link: string;
     /** Internal DB order id (UUID) — used by the worker to render the order-summary image. */
     orderId?: string;
+    /** Purchased line items shown in the email body. */
+    line_items?: IOrderConfirmedLineItem[];
+    subtotal?: string;
+    /** Only set when a discount was applied (> 0). */
+    discount?: string;
+    total?: string;
 }
 
 export interface IPaymentFailedPayload {
