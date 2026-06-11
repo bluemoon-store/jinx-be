@@ -21,11 +21,13 @@ import {
     IWelcomeToJinxManagementPayload,
 } from 'src/common/helper/interfaces/email.interface';
 import { HelperEmailService } from 'src/common/helper/services/helper.email.service';
+import { OrderImageService } from 'src/modules/order/services/order-image.service';
 
 @Processor(APP_BULL_QUEUES.EMAIL)
 export class EmailProcessorWorker {
     constructor(
         private readonly helperEmailService: HelperEmailService,
+        private readonly orderImageService: OrderImageService,
         private readonly logger: PinoLogger
     ) {
         this.logger.setContext(EmailProcessorWorker.name);
@@ -151,11 +153,46 @@ export class EmailProcessorWorker {
     async processOrderConfirmed(
         job: Job<ISendEmailBasePayload<IOrderConfirmedPayload>>
     ) {
-        await this.dispatch(
-            job,
-            EMAIL_TEMPLATES.ORDER_CONFIRMED,
-            'order-confirmed'
+        const { toEmails, data } = job.data;
+        this.logger.info(
+            { jobId: job.id, recipients: toEmails.length },
+            'Processing order-confirmed email job'
         );
+
+        try {
+            // Best-effort order-summary image; never blocks the email on failure.
+            const attachment = await this.orderImageService.generateOrderImage(
+                data.orderId,
+                {
+                    orderNumber: data.order_id,
+                    paymentMethod: data.payment_method,
+                    amount: data.amount,
+                    date: data.date,
+                }
+            );
+
+            await this.helperEmailService.sendEmail({
+                emails: toEmails,
+                emailType: EMAIL_TEMPLATES.ORDER_CONFIRMED,
+                payload: data,
+                attachments: attachment ? [attachment] : undefined,
+            });
+
+            this.logger.info(
+                {
+                    jobId: job.id,
+                    recipients: toEmails.length,
+                    withImage: !!attachment,
+                },
+                'order-confirmed emails sent successfully'
+            );
+        } catch (error) {
+            this.logger.error(
+                { jobId: job.id, error: error.message },
+                `Failed to send order-confirmed emails: ${error.message}`
+            );
+            throw error;
+        }
     }
 
     @Process(EMAIL_TEMPLATES.PAYMENT_FAILED)

@@ -37,6 +37,7 @@ export class HelperEmailService implements IHelperEmailService {
         emailType,
         emails,
         payload,
+        attachments,
     }: ISendEmailParams): Promise<IEmailSendResult> {
         const subject = this.resolveSubject(emailType);
         const html = this.renderTemplate(
@@ -48,6 +49,7 @@ export class HelperEmailService implements IHelperEmailService {
             to: emails,
             subject,
             html,
+            ...(attachments?.length ? { attachments } : {}),
         });
     }
 

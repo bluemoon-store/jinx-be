@@ -1,9 +1,11 @@
 import { EMAIL_TEMPLATES } from 'src/common/email/enums/email-template.enum';
+import { IEmailAttachment } from 'src/common/email/interfaces/smtp.service.interface';
 
 export interface ISendEmailParams {
     emailType: EMAIL_TEMPLATES;
     emails: string[];
     payload: Record<string, any>;
+    attachments?: IEmailAttachment[];
 }
 
 export interface ISendEmailBasePayload<T> {
@@ -50,6 +52,8 @@ export interface IOrderConfirmedPayload {
     amount: string;
     date: string;
     dashboard_link: string;
+    /** Internal DB order id (UUID) — used by the worker to render the order-summary image. */
+    orderId?: string;
 }
 
 export interface IPaymentFailedPayload {

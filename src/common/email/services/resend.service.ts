@@ -44,6 +44,17 @@ export class ResendService implements ISmtpService {
             ...(params.replyTo !== undefined
                 ? { replyTo: params.replyTo }
                 : {}),
+            ...(params.attachments?.length
+                ? {
+                      attachments: params.attachments.map(a => ({
+                          filename: a.filename,
+                          content: a.content,
+                          ...(a.contentType
+                              ? { contentType: a.contentType }
+                              : {}),
+                      })),
+                  }
+                : {}),
         });
 
         if (error) {

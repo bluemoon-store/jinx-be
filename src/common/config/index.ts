@@ -6,6 +6,7 @@ import FirebaseConfig from './firebase.config';
 import PaymentGatewayConfig from './payment-gateway.config';
 import RedisConfig from './redis.config';
 import ResendConfig from './resend.config';
+import RenderConfig from './render.config';
 import SmtpConfig from './smtp.config';
 import SupabaseConfig from './supabase.config';
 import TurnstileConfig from './turnstile.config';
@@ -22,4 +23,5 @@ export default [
     ResendConfig,
     PaymentGatewayConfig,
     TurnstileConfig,
+    RenderConfig,
 ];

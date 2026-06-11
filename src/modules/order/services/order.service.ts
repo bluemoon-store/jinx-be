@@ -1406,6 +1406,7 @@ export class OrderService implements IOrderService {
                     amount: formatted,
                     date: completedAt.toISOString().slice(0, 10),
                     dashboard_link: dashboardLink,
+                    orderId: order.id,
                 },
                 toEmails: [order.user.email],
             } as ISendEmailBasePayload<IOrderConfirmedPayload>);
