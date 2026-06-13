@@ -94,4 +94,10 @@ export interface IMonthlyStoreReportPayload {
     report_month: string;
     total_orders: number;
     total_revenue: string;
+    avg_order_value: string;
+    new_customers: number;
+    fulfillment_rate: string;
+    top_category: string;
+    top_category_revenue: string;
+    top_payment_method: string;
 }

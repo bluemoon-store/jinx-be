@@ -1,7 +1,7 @@
 import { InjectQueue } from '@nestjs/bull';
 import { Injectable, Scope } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { OrderStatus, Role } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { Queue } from 'bull';
 import { PinoLogger } from 'nestjs-pino';
 
@@ -12,13 +12,25 @@ import {
     IMonthlyStoreReportPayload,
     ISendEmailBasePayload,
 } from 'src/common/helper/interfaces/email.interface';
+import { CustomerMetricsService } from 'src/modules/dashboard/services/customer-metrics.service';
+import { SalesMetricsService } from 'src/modules/dashboard/services/sales-metrics.service';
 
 const REPORT_RECIPIENT_ROLES: Role[] = [Role.OWNER, Role.SUPER_ADMIN, Role.MOD];
+
+const EMPTY_VALUE = '—';
+
+const formatUsd = (value: number): string =>
+    `$${value.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
 
 @Injectable({ scope: Scope.DEFAULT })
 export class MonthlyReportScheduleWorker {
     constructor(
         private readonly databaseService: DatabaseService,
+        private readonly salesMetrics: SalesMetricsService,
+        private readonly customerMetrics: CustomerMetricsService,
         @InjectQueue(APP_BULL_QUEUES.EMAIL)
         private readonly emailQueue: Queue,
         private readonly logger: PinoLogger
@@ -38,29 +50,48 @@ export class MonthlyReportScheduleWorker {
             const periodStart = new Date(
                 Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)
             );
-
-            const totalOrders = await this.databaseService.order.count({
-                where: {
-                    status: OrderStatus.COMPLETED,
-                    completedAt: { gte: periodStart, lt: periodEnd },
-                },
-            });
-
-            const revenueAgg = await this.databaseService.order.aggregate({
-                where: {
-                    status: OrderStatus.COMPLETED,
-                    completedAt: { gte: periodStart, lt: periodEnd },
-                },
-                _sum: { totalAmount: true },
-            });
-
-            const totalRevenueNumber = Number(
-                revenueAgg._sum.totalAmount?.toString() ?? '0'
+            // Previous calendar month — only consumed by getTopCategories /
+            // getPaymentMix to satisfy the PeriodRange type (they read .from/.to).
+            const prevPeriodStart = new Date(
+                Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 1)
             );
-            const totalRevenueFormatted = `$${totalRevenueNumber.toLocaleString(
-                'en-US',
-                { minimumFractionDigits: 2, maximumFractionDigits: 2 }
-            )}`;
+            const range = {
+                from: periodStart,
+                to: periodEnd,
+                prevFrom: prevPeriodStart,
+                prevTo: periodStart,
+                bucket: 'month' as const,
+            };
+
+            const [
+                { revenue, orderCount: totalOrders },
+                avgOrderValue,
+                fulfillmentRate,
+                newCustomers,
+                topCategories,
+                paymentMix,
+            ] = await Promise.all([
+                this.salesMetrics.aggregateRevenueAndCount(
+                    periodStart,
+                    periodEnd
+                ),
+                this.salesMetrics.getAvgOrderValue(periodStart, periodEnd),
+                this.salesMetrics.getFulfillmentRate(periodStart, periodEnd),
+                this.customerMetrics.countNewCustomers(periodStart, periodEnd),
+                this.salesMetrics.getTopCategories(range, 1),
+                this.salesMetrics.getPaymentMix(range),
+            ]);
+
+            const totalRevenueFormatted = formatUsd(Number(revenue));
+            const avgOrderValueFormatted = formatUsd(Number(avgOrderValue));
+            const fulfillmentRateFormatted = `${fulfillmentRate.toFixed(2)}%`;
+
+            const topCategory = topCategories.items[0];
+            const topCategoryName = topCategory?.name ?? EMPTY_VALUE;
+            const topCategoryRevenue = topCategory
+                ? formatUsd(Number(topCategory.revenue))
+                : EMPTY_VALUE;
+            const topPaymentMethod = paymentMix.items[0]?.name ?? EMPTY_VALUE;
 
             const reportMonth = periodStart.toLocaleString('en-US', {
                 month: 'long',
@@ -92,6 +123,12 @@ export class MonthlyReportScheduleWorker {
                         report_month: reportMonth,
                         total_orders: totalOrders,
                         total_revenue: totalRevenueFormatted,
+                        avg_order_value: avgOrderValueFormatted,
+                        new_customers: newCustomers,
+                        fulfillment_rate: fulfillmentRateFormatted,
+                        top_category: topCategoryName,
+                        top_category_revenue: topCategoryRevenue,
+                        top_payment_method: topPaymentMethod,
                     },
                     toEmails: [recipient.email],
                 } as ISendEmailBasePayload<IMonthlyStoreReportPayload>);

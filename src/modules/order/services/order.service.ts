@@ -469,7 +469,7 @@ export class OrderService implements IOrderService {
             if (error instanceof HttpException) {
                 throw error;
             }
-            this.logger.error(`Failed to create order: ${error.message}`);
+            this.logger.error({ error, userId }, 'Failed to create order');
             throw new HttpException(
                 'order.error.createOrderFailed',
                 HttpStatus.INTERNAL_SERVER_ERROR

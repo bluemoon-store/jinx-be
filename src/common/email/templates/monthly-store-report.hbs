@@ -68,7 +68,7 @@ body{margin:0;padding:0;background-color:#051329;}
       <tr>
         <td align="center" style="padding-top:24px;">
           <p style="margin:0 0 5px;font-family:'Commissioner',Arial,sans-serif;font-size:24px;font-weight:700;color:#ffffff;line-height:32px;letter-spacing:0.48px;text-align:center;">Monthly Store Report</p>
-          <p style="margin:0 auto;font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:rgba(255,255,255,0.75);line-height:24px;text-align:center;max-width:468px;">Your Jinx.to Store report for {{report_month}} is ready.<br><br>The attached PDF includes your store performance summary for the previous month.</p>
+          <p style="margin:0 auto;font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:rgba(255,255,255,0.75);line-height:24px;text-align:center;max-width:468px;">Your Jinx.to Store report for {{report_month}} is ready.<br><br>Here is your store performance summary for the month.</p>
         </td>
       </tr>
 
@@ -101,10 +101,30 @@ body{margin:0;padding:0;background-color:#051329;}
                     <td style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:rgba(255,255,255,0.75);line-height:28px;letter-spacing:-0.16px;padding-bottom:12px;">Total Revenue</td>
                     <td align="right" style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:#ffffff;line-height:28px;letter-spacing:-0.16px;white-space:nowrap;padding-bottom:12px;">{{total_revenue}}</td>
                   </tr>
-                  <!-- Total Revenue (row 4) -->
+                  <!-- Average Order Value -->
                   <tr>
-                    <td style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:rgba(255,255,255,0.75);line-height:28px;letter-spacing:-0.16px;">Total Revenue</td>
-                    <td align="right" style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:#ffffff;line-height:28px;letter-spacing:-0.16px;white-space:nowrap;">{{total_revenue}}</td>
+                    <td style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:rgba(255,255,255,0.75);line-height:28px;letter-spacing:-0.16px;padding-bottom:12px;">Average Order Value</td>
+                    <td align="right" style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:#ffffff;line-height:28px;letter-spacing:-0.16px;white-space:nowrap;padding-bottom:12px;">{{avg_order_value}}</td>
+                  </tr>
+                  <!-- New Customers -->
+                  <tr>
+                    <td style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:rgba(255,255,255,0.75);line-height:28px;letter-spacing:-0.16px;padding-bottom:12px;">New Customers</td>
+                    <td align="right" style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:#ffffff;line-height:28px;letter-spacing:-0.16px;white-space:nowrap;padding-bottom:12px;">{{new_customers}}</td>
+                  </tr>
+                  <!-- Fulfillment Rate -->
+                  <tr>
+                    <td style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:rgba(255,255,255,0.75);line-height:28px;letter-spacing:-0.16px;padding-bottom:12px;">Fulfillment Rate</td>
+                    <td align="right" style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:#ffffff;line-height:28px;letter-spacing:-0.16px;white-space:nowrap;padding-bottom:12px;">{{fulfillment_rate}}</td>
+                  </tr>
+                  <!-- Top Category -->
+                  <tr>
+                    <td style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:rgba(255,255,255,0.75);line-height:28px;letter-spacing:-0.16px;padding-bottom:12px;">Top Category</td>
+                    <td align="right" style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:#ffffff;line-height:28px;letter-spacing:-0.16px;white-space:nowrap;padding-bottom:12px;">{{top_category}} ({{top_category_revenue}})</td>
+                  </tr>
+                  <!-- Top Payment Method -->
+                  <tr>
+                    <td style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:rgba(255,255,255,0.75);line-height:28px;letter-spacing:-0.16px;">Top Payment Method</td>
+                    <td align="right" style="font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:#ffffff;line-height:28px;letter-spacing:-0.16px;white-space:nowrap;">{{top_payment_method}}</td>
                   </tr>
                 </table>
               </td>
@@ -113,10 +133,10 @@ body{margin:0;padding:0;background-color:#051329;}
         </td>
       </tr>
 
-      <!-- PDF NOTE -->
+      <!-- REPORT NOTE -->
       <tr>
         <td align="center" style="padding-top:24px;">
-          <p style="margin:0;font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:#ffffff;line-height:24px;text-align:center;">Please download the <a href="#" style="color:#eb2dff;text-decoration:none;">attached PDF</a> to view the full monthly report.</p>
+          <p style="margin:0;font-family:'Commissioner',Arial,sans-serif;font-size:16px;font-weight:500;color:#ffffff;line-height:24px;text-align:center;">Sign in to the <a href="{{admin_panel_link}}" style="color:#eb2dff;text-decoration:none;">admin dashboard</a> for the full breakdown and trends.</p>
         </td>
       </tr>
 
