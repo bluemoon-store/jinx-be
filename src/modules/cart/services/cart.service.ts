@@ -68,20 +68,10 @@ export class CartService implements ICartService {
                 );
             }
 
-            if (variant.stockQuantity === 0) {
-                throw new HttpException(
-                    'cart.error.outOfStock',
-                    HttpStatus.BAD_REQUEST
-                );
-            }
-
-            if (variant.stockQuantity < quantity) {
-                throw new HttpException(
-                    'cart.error.insufficientStock',
-                    HttpStatus.BAD_REQUEST
-                );
-            }
-
+            // The cart is an intent list: we do NOT hard-fail on stock here.
+            // Stock is enforced atomically at order creation/payment
+            // (order.service `validateCartForOrder` + stock-line `allocateForOrderItem`),
+            // so a buyer's own pending reservation can't make their cart sync fail.
             return {
                 unitPrice:
                     typeof variant.price === 'string'
@@ -90,20 +80,7 @@ export class CartService implements ICartService {
             };
         }
 
-        if (product.stockQuantity === 0) {
-            throw new HttpException(
-                'cart.error.outOfStock',
-                HttpStatus.BAD_REQUEST
-            );
-        }
-
-        if (product.stockQuantity < quantity) {
-            throw new HttpException(
-                'cart.error.insufficientStock',
-                HttpStatus.BAD_REQUEST
-            );
-        }
-
+        // No variant: same intent-list policy — no stock check at the cart layer.
         return {
             unitPrice:
                 typeof product.price === 'string'
