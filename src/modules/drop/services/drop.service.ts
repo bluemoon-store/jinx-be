@@ -44,7 +44,6 @@ export class DropService {
                 id: true,
                 name: true,
                 slug: true,
-                iconUrl: true,
                 images: {
                     where: { deletedAt: null },
                     select: { url: true, isPrimary: true, sortOrder: true },
@@ -75,7 +74,6 @@ export class DropService {
                         id: true,
                         name: true,
                         slug: true,
-                        iconUrl: true,
                         redeemProcess: true,
                         warrantyText: true,
                         images: {
@@ -119,7 +117,6 @@ export class DropService {
             variantId: row.drop.variant.id,
             productName: row.drop.product.name,
             productSlug: row.drop.product.slug,
-            productIconUrl: row.drop.product.iconUrl ?? null,
             productImageUrl: primaryImage?.url ?? null,
             productRedeemProcess: row.drop.product.redeemProcess ?? null,
             productWarrantyText: row.drop.product.warrantyText ?? null,
@@ -149,7 +146,6 @@ export class DropService {
                 id: row.product.id,
                 name: row.product.name,
                 slug: row.product.slug,
-                iconUrl: row.product.iconUrl ?? null,
                 primaryImageUrl: primaryImage?.url ?? null,
             },
             variant: {
@@ -465,7 +461,6 @@ export class DropService {
                 id: row.product.id,
                 name: row.product.name,
                 slug: row.product.slug,
-                iconUrl: row.product.iconUrl ?? null,
                 images: (row.product.images ?? []).map(img => ({
                     url: img.url ?? null,
                     isPrimary: img.isPrimary,

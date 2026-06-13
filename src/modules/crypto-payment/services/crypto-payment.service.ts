@@ -105,58 +105,76 @@ export class CryptoPaymentService implements ICryptoPaymentService {
                 );
             }
 
-            // Rate limiting: Check if payment already exists (1 payment per order)
+            // A payment already exists for this order (unique one-to-one).
+            // Decide whether to return it as-is, switch its currency, or refresh
+            // an expired one in place. We never create a second record.
             if (order.cryptoPayment) {
-                this.logger.warn(
-                    { orderId, paymentId: order.cryptoPayment.id },
-                    'Payment already exists for this order - rate limit enforced'
-                );
+                const existing = order.cryptoPayment;
+                const sameCurrency = existing.cryptocurrency === cryptocurrency;
+                const hasFunds =
+                    existing.txHash != null ||
+                    existing.confirmations > 0 ||
+                    existing.status !== PaymentStatus.PENDING;
 
-                // Check if existing payment is expired
+                if (hasFunds) {
+                    if (sameCurrency) {
+                        // Same method, payment already in flight — just show it.
+                        return this.mapToResponseDto(existing, orderId);
+                    }
+                    // Funds were already detected on the current address.
+                    // Switching currency would orphan them, so block the change
+                    // and keep the buyer on the existing address.
+                    throw new BadRequestException(
+                        'Cannot change currency: a payment has already been detected for this order.'
+                    );
+                }
+
                 const now = new Date();
-                if (now > order.cryptoPayment.expiresAt) {
-                    // Grace period check
+                const expired = now > existing.expiresAt;
+
+                if (sameCurrency && !expired) {
+                    // Same method, still within the payment window — reuse the
+                    // existing address and timer (idempotent re-entry).
+                    return this.mapToResponseDto(existing, orderId);
+                }
+
+                if (sameCurrency && expired) {
                     const gracePeriodMinutes = this.configService.get<number>(
                         'crypto.payment.expirationGracePeriodMinutes',
                         30
                     );
-                    const gracePeriodDate = new Date(
-                        order.cryptoPayment.expiresAt
-                    );
+                    const gracePeriodDate = new Date(existing.expiresAt);
                     gracePeriodDate.setMinutes(
                         gracePeriodDate.getMinutes() + gracePeriodMinutes
                     );
-
-                    if (now > gracePeriodDate) {
-                        // Payment is expired and past grace period
-                        // User can create a new payment
-                        this.logger.info(
-                            { orderId, oldPaymentId: order.cryptoPayment.id },
-                            'Previous payment expired past grace period, allowing new payment'
-                        );
-                    } else {
-                        // Still within grace period - check for funds
-                        this.logger.warn(
-                            {
-                                orderId,
-                                paymentId: order.cryptoPayment.id,
-                                expiresAt: order.cryptoPayment.expiresAt,
-                            },
-                            'Payment within grace period - checking for late payment before creating new one'
-                        );
-                        // Return existing payment - grace period still active
-                        return this.mapToResponseDto(
-                            order.cryptoPayment,
-                            orderId
-                        );
+                    if (now <= gracePeriodDate) {
+                        // Within grace window — keep the same address so a late
+                        // payment to it can still be reconciled.
+                        return this.mapToResponseDto(existing, orderId);
                     }
-                } else {
-                    // Payment not expired - return existing
-                    return this.mapToResponseDto(order.cryptoPayment, orderId);
+                    // Past grace window — fall through and refresh in place.
                 }
+
+                // Either a different currency was requested (a real "change
+                // payment method") or the same-currency payment is past its
+                // grace window. Replace the pending record in place.
+                this.logger.info(
+                    {
+                        orderId,
+                        paymentId: existing.id,
+                        from: existing.cryptocurrency,
+                        to: cryptocurrency,
+                    },
+                    'Replacing pending crypto payment in place'
+                );
+                return this.replacePaymentInPlace(
+                    order,
+                    existing.id,
+                    cryptocurrency
+                );
             }
 
-            // 2. Get exchange rate and calculate crypto amount
+            // No existing payment — create a fresh one.
             const amountUsd = parseFloat(order.totalAmount.toString());
             if (amountUsd <= 0) {
                 throw new BadRequestException(
@@ -164,159 +182,45 @@ export class CryptoPaymentService implements ICryptoPaymentService {
                 );
             }
 
-            const exchangeRate = await this.exchangeRateService.getRate(
+            const artifacts = await this.buildPaymentArtifacts(
+                orderId,
                 cryptocurrency,
-                'USD'
-            );
-            const cryptoAmount = await this.exchangeRateService.convertToCrypto(
-                amountUsd,
-                cryptocurrency,
-                'USD'
+                amountUsd
             );
 
-            this.logger.debug(
-                {
-                    orderId,
-                    cryptocurrency,
-                    amountUsd,
-                    exchangeRate,
-                    cryptoAmount,
-                },
-                'Calculated crypto amount'
-            );
-
-            const totalAmount = cryptoAmount;
-
-            // 4. Generate unique payment address
-            const addressDetails =
-                await this.systemWalletService.generatePaymentAddress(
-                    orderId,
-                    cryptocurrency,
-                    totalAmount,
-                    amountUsd
-                );
-
-            // 5. Get platform wallet address
-            const platformWalletAddress =
-                this.systemWalletService.getPlatformWalletAddress(
-                    cryptocurrency
-                );
-
-            if (!platformWalletAddress) {
-                throw new BadRequestException(
-                    `Platform wallet address not configured for ${cryptocurrency}`
-                );
-            }
-
-            // 6. Determine required confirmations based on cryptocurrency
-            const requiredConfirmations =
-                this.getRequiredConfirmations(cryptocurrency);
-
-            // 7. Determine network based on cryptocurrency
-            const network = this.getNetwork(cryptocurrency);
-
-            // 8. Create payment record in database
             const payment = await this.databaseService.cryptoPayment.create({
                 data: {
                     orderId,
                     cryptocurrency,
-                    network,
-                    paymentAddress: addressDetails.address,
-                    derivationIndex: addressDetails.derivationIndex,
-                    derivationPath: addressDetails.derivationPath,
-                    encryptedPrivateKey: addressDetails.encryptedPrivateKey,
-                    amount: new Prisma.Decimal(totalAmount),
+                    network: artifacts.network,
+                    paymentAddress: artifacts.addressDetails.address,
+                    derivationIndex: artifacts.addressDetails.derivationIndex,
+                    derivationPath: artifacts.addressDetails.derivationPath,
+                    encryptedPrivateKey:
+                        artifacts.addressDetails.encryptedPrivateKey,
+                    amount: new Prisma.Decimal(artifacts.totalAmount),
                     amountUsd: new Prisma.Decimal(amountUsd),
-                    exchangeRate: new Prisma.Decimal(exchangeRate),
-                    platformWalletAddress,
+                    exchangeRate: new Prisma.Decimal(artifacts.exchangeRate),
+                    platformWalletAddress: artifacts.platformWalletAddress,
                     status: PaymentStatus.PENDING,
-                    requiredConfirmations,
-                    expiresAt: addressDetails.expiresAt,
+                    requiredConfirmations: artifacts.requiredConfirmations,
+                    expiresAt: artifacts.addressDetails.expiresAt,
                 },
             });
-
-            await this.stockLineService.syncReservationExpiryForOrder(
-                this.databaseService,
-                orderId,
-                payment.expiresAt
-            );
 
             this.logger.info(
                 {
                     paymentId: payment.id,
                     orderId,
                     cryptocurrency,
-                    address: addressDetails.address,
-                    amount: cryptoAmount,
-                    expiresAt: addressDetails.expiresAt,
+                    address: payment.paymentAddress,
+                    amount: artifacts.cryptoAmount,
+                    expiresAt: payment.expiresAt,
                 },
                 'Payment record created'
             );
 
-            // 9. Generate QR code using order amount
-            const qrCode = await generatePaymentQRCode(
-                addressDetails.address,
-                totalAmount,
-                cryptocurrency
-            );
-
-            // 10. Generate payment URI using order amount
-            const paymentUri = generatePaymentURI(
-                addressDetails.address,
-                totalAmount,
-                cryptocurrency
-            );
-
-            // 11. Queue verification job (check payment status periodically)
-            await this.paymentVerificationQueue.add(
-                'verify-payment',
-                {
-                    paymentId: payment.id,
-                    orderId,
-                },
-                {
-                    attempts: 3,
-                    backoff: {
-                        type: 'exponential',
-                        delay: 60000, // Start with 1 minute delay
-                    },
-                    removeOnComplete: true,
-                    removeOnFail: false,
-                }
-            );
-
-            this.logger.info(
-                { paymentId: payment.id, orderId },
-                'Payment verification job queued'
-            );
-
-            // 12. Return payment details
-            const timeRemaining = Math.max(
-                0,
-                Math.floor(
-                    (addressDetails.expiresAt.getTime() - Date.now()) / 1000
-                )
-            );
-
-            return {
-                paymentId: payment.id,
-                orderId,
-                cryptocurrency,
-                network,
-                paymentAddress: addressDetails.address,
-                amount: totalAmount.toString(),
-                amountUsd: amountUsd.toString(),
-                exchangeRate: exchangeRate.toString(),
-                qrCode,
-                status: payment.status,
-                expiresAt: addressDetails.expiresAt,
-                timeRemaining,
-                txHash: payment.txHash || undefined,
-                confirmations: payment.confirmations,
-                requiredConfirmations: payment.requiredConfirmations,
-                paymentUri,
-                createdAt: payment.createdAt,
-            };
+            return this.finalizePayment(payment, orderId);
         } catch (error) {
             if (
                 error instanceof NotFoundException ||
@@ -335,6 +239,184 @@ export class CryptoPaymentService implements ICryptoPaymentService {
                 HttpStatus.INTERNAL_SERVER_ERROR
             );
         }
+    }
+
+    /**
+     * Compute everything needed to (re)create a payment for a given currency:
+     * exchange rate, crypto amount, a freshly derived address, the platform
+     * wallet, required confirmations, and network. Shared by the create and the
+     * in-place replace paths.
+     */
+    private async buildPaymentArtifacts(
+        orderId: string,
+        cryptocurrency: CryptoCurrency,
+        amountUsd: number
+    ) {
+        const exchangeRate = await this.exchangeRateService.getRate(
+            cryptocurrency,
+            'USD'
+        );
+        const cryptoAmount = await this.exchangeRateService.convertToCrypto(
+            amountUsd,
+            cryptocurrency,
+            'USD'
+        );
+        const totalAmount = cryptoAmount;
+
+        const addressDetails =
+            await this.systemWalletService.generatePaymentAddress(
+                orderId,
+                cryptocurrency,
+                totalAmount,
+                amountUsd
+            );
+
+        const platformWalletAddress =
+            this.systemWalletService.getPlatformWalletAddress(cryptocurrency);
+        if (!platformWalletAddress) {
+            throw new BadRequestException(
+                `Platform wallet address not configured for ${cryptocurrency}`
+            );
+        }
+
+        const requiredConfirmations =
+            this.getRequiredConfirmations(cryptocurrency);
+        const network = this.getNetwork(cryptocurrency);
+
+        this.logger.debug(
+            { orderId, cryptocurrency, amountUsd, exchangeRate, cryptoAmount },
+            'Calculated crypto amount'
+        );
+
+        return {
+            exchangeRate,
+            cryptoAmount,
+            totalAmount,
+            addressDetails,
+            platformWalletAddress,
+            requiredConfirmations,
+            network,
+        };
+    }
+
+    /**
+     * Sync the stock reservation expiry, queue the verification job, and map
+     * the persisted payment to its response DTO. Shared by create/replace.
+     */
+    private async finalizePayment(
+        payment: { id: string; expiresAt: Date },
+        orderId: string
+    ): Promise<CryptoPaymentResponseDto> {
+        await this.stockLineService.syncReservationExpiryForOrder(
+            this.databaseService,
+            orderId,
+            payment.expiresAt
+        );
+
+        await this.paymentVerificationQueue.add(
+            'verify-payment',
+            { paymentId: payment.id, orderId },
+            {
+                attempts: 3,
+                backoff: {
+                    type: 'exponential',
+                    delay: 60000, // Start with 1 minute delay
+                },
+                removeOnComplete: true,
+                removeOnFail: false,
+            }
+        );
+
+        this.logger.info(
+            { paymentId: payment.id, orderId },
+            'Payment verification job queued'
+        );
+
+        return this.mapToResponseDto(payment, orderId);
+    }
+
+    /**
+     * Replace a pending, unfunded crypto payment in place with a new currency
+     * (or a refreshed window). Updates the single existing record so the unique
+     * one-to-one order relation is preserved. The conditional `where` also
+     * guards against funds landing between the read and the write — Prisma
+     * throws P2025 (no row matched), which we surface as a clean 400.
+     */
+    private async replacePaymentInPlace(
+        order: { id: string; totalAmount: Prisma.Decimal },
+        existingPaymentId: string,
+        cryptocurrency: CryptoCurrency
+    ): Promise<CryptoPaymentResponseDto> {
+        const orderId = order.id;
+        const amountUsd = parseFloat(order.totalAmount.toString());
+        if (amountUsd <= 0) {
+            throw new BadRequestException(
+                'Order total amount must be greater than 0'
+            );
+        }
+
+        const artifacts = await this.buildPaymentArtifacts(
+            orderId,
+            cryptocurrency,
+            amountUsd
+        );
+
+        let payment;
+        try {
+            payment = await this.databaseService.cryptoPayment.update({
+                where: {
+                    id: existingPaymentId,
+                    status: PaymentStatus.PENDING,
+                    txHash: null,
+                    confirmations: 0,
+                },
+                data: {
+                    cryptocurrency,
+                    network: artifacts.network,
+                    paymentAddress: artifacts.addressDetails.address,
+                    derivationIndex: artifacts.addressDetails.derivationIndex,
+                    derivationPath: artifacts.addressDetails.derivationPath,
+                    encryptedPrivateKey:
+                        artifacts.addressDetails.encryptedPrivateKey,
+                    amount: new Prisma.Decimal(artifacts.totalAmount),
+                    amountUsd: new Prisma.Decimal(amountUsd),
+                    exchangeRate: new Prisma.Decimal(artifacts.exchangeRate),
+                    platformWalletAddress: artifacts.platformWalletAddress,
+                    status: PaymentStatus.PENDING,
+                    requiredConfirmations: artifacts.requiredConfirmations,
+                    expiresAt: artifacts.addressDetails.expiresAt,
+                    // Reset any prior monitoring state so a stale verification
+                    // run can never carry over to the new address/currency.
+                    txHash: null,
+                    confirmations: 0,
+                    paidAt: null,
+                    confirmedAt: null,
+                },
+            });
+        } catch (error) {
+            if (
+                error instanceof Prisma.PrismaClientKnownRequestError &&
+                error.code === 'P2025'
+            ) {
+                throw new BadRequestException(
+                    'Cannot change currency: a payment has already been detected for this order.'
+                );
+            }
+            throw error;
+        }
+
+        this.logger.info(
+            {
+                paymentId: payment.id,
+                orderId,
+                cryptocurrency,
+                address: payment.paymentAddress,
+                expiresAt: payment.expiresAt,
+            },
+            'Pending payment replaced in place'
+        );
+
+        return this.finalizePayment(payment, orderId);
     }
 
     /**

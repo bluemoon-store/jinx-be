@@ -33,12 +33,6 @@ export class DropProductSummaryDto {
     @Expose()
     @IsOptional()
     @IsString()
-    iconUrl: string | null;
-
-    @ApiPropertyOptional({ nullable: true })
-    @Expose()
-    @IsOptional()
-    @IsString()
     primaryImageUrl: string | null;
 }
 

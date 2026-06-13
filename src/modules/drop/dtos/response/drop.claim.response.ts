@@ -113,12 +113,6 @@ export class MyDropClaimResponseDto {
     @Expose()
     @IsOptional()
     @IsString()
-    productIconUrl: string | null;
-
-    @ApiPropertyOptional({ nullable: true })
-    @Expose()
-    @IsOptional()
-    @IsString()
     productImageUrl: string | null;
 
     @ApiPropertyOptional({ nullable: true })

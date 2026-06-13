@@ -53,7 +53,6 @@ type ProductSeedDef = {
     launchedAt: Date | null;
     restockedAt: Date | null;
     flair?: string;
-    iconUrl?: string;
 };
 
 const CATEGORY_SEEDS: Array<{
@@ -423,7 +422,6 @@ export class ProductsSeedService {
             }
 
             const category = categories[def.categorySlug];
-            const iconUrl = def.iconUrl ?? null;
             const basePrice = VARIANT_DENOMS[0].price;
 
             const totalStock = STOCK_LINES_PER_VARIANT * VARIANT_DENOMS.length;
@@ -441,7 +439,6 @@ export class ProductsSeedService {
                     sortOrder: def.sortOrder,
                     shortNotice: def.shortNotice,
                     flair: def.flair ?? null,
-                    iconUrl,
                     isHot: def.isHot,
                     isNew: def.isNew,
                     isNFA: false,

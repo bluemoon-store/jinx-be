@@ -1,9 +1,16 @@
 import { InjectQueue } from '@nestjs/bull';
-import { HttpStatus, Injectable, HttpException } from '@nestjs/common';
+import {
+    HttpStatus,
+    Injectable,
+    HttpException,
+    ForbiddenException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
 import { PinoLogger } from 'nestjs-pino';
-import { OrderStatus, Prisma, StockLineStatus } from '@prisma/client';
+import { OrderStatus, Prisma, Role, StockLineStatus } from '@prisma/client';
+
+import { IAuthUser } from 'src/common/request/interfaces/request.interface';
 
 import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { DatabaseService } from 'src/common/database/services/database.service';
@@ -673,7 +680,8 @@ export class OrderService implements IOrderService {
     async getOrderDetail(
         orderId: string,
         userId?: string,
-        skipOwnershipCheck = false
+        skipOwnershipCheck = false,
+        requester?: { id: string; role: Role }
     ): Promise<OrderDetailResponseDto> {
         try {
             const order = await this.databaseService.order.findFirst({
@@ -732,6 +740,20 @@ export class OrderService implements IOrderService {
                 }
             }
 
+            // Alliance may only open an order if at least one of its items is a
+            // product they created; otherwise the order is invisible to them.
+            if (requester?.role === Role.ALLIANCE) {
+                const ownsAnyItem = order.items.some(
+                    item => item.product?.createdById === requester.id
+                );
+                if (!ownsAnyItem) {
+                    throw new HttpException(
+                        'order.error.orderNotFound',
+                        HttpStatus.NOT_FOUND
+                    );
+                }
+            }
+
             return order as unknown as OrderDetailResponseDto;
         } catch (error) {
             if (error instanceof HttpException) {
@@ -742,6 +764,40 @@ export class OrderService implements IOrderService {
                 'order.error.getOrderDetailFailed',
                 HttpStatus.INTERNAL_SERVER_ERROR
             );
+        }
+    }
+
+    /**
+     * Ensure the requester may act on the given order items. Non-Alliance staff
+     * pass through; Alliance is restricted to items whose product it created.
+     */
+    async assertCanActOnOrderItems(
+        orderId: string,
+        itemIds: string[],
+        user: IAuthUser
+    ): Promise<void> {
+        if (user.role !== Role.ALLIANCE) {
+            return;
+        }
+
+        const uniqueIds = [...new Set(itemIds)];
+        const items = await this.databaseService.orderItem.findMany({
+            where: { id: { in: uniqueIds }, orderId },
+            select: { id: true, product: { select: { createdById: true } } },
+        });
+
+        if (items.length !== uniqueIds.length) {
+            throw new HttpException(
+                'order.error.orderItemNotFound',
+                HttpStatus.NOT_FOUND
+            );
+        }
+
+        const hasForeignItem = items.some(
+            item => item.product?.createdById !== user.userId
+        );
+        if (hasForeignItem) {
+            throw new ForbiddenException('order.error.notItemOwner');
         }
     }
 
@@ -1316,6 +1372,8 @@ export class OrderService implements IOrderService {
         limit?: number;
         status?: OrderStatus;
         userId?: string;
+        requesterId?: string;
+        requesterRole?: Role;
     }): Promise<ApiPaginatedDataDto<OrderDetailResponseDto>> {
         try {
             const where: any = {
@@ -1328,6 +1386,17 @@ export class OrderService implements IOrderService {
 
             if (options?.userId) {
                 where.userId = options.userId;
+            }
+
+            // Alliance only sees orders that contain at least one item which is
+            // a product they created.
+            if (
+                options?.requesterRole === Role.ALLIANCE &&
+                options?.requesterId
+            ) {
+                where.items = {
+                    some: { product: { createdById: options.requesterId } },
+                };
             }
 
             const result =

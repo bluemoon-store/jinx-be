@@ -25,6 +25,18 @@ export const SUPPORT_HANDLING_ROLES: Role[] = [
     Role.SUPPORT,
 ];
 
+/**
+ * Per-order-item operations (deliver, issue replacement). Alliance is included
+ * but is additionally restricted at the service layer to items whose product
+ * it created (see OrderService.assertCanActOnOrderItems).
+ */
+export const ITEM_OPERATIONS_ROLES: Role[] = [
+    Role.OWNER,
+    Role.MOD,
+    Role.SUPPORT,
+    Role.ALLIANCE,
+];
+
 /** Stock-line contributor roles (Alliance included for current iteration). */
 export const STOCK_CONTRIBUTOR_ROLES: Role[] = [
     Role.OWNER,

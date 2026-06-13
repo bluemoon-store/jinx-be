@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ActivityLogCategory, ActivityLogSeverity } from '@prisma/client';
 
 import {
+    ITEM_OPERATIONS_ROLES,
     READ_ADMIN_ROLES,
     STAFF_OPERATIONS_ROLES,
     SUPPORT_HANDLING_ROLES,
@@ -61,13 +62,16 @@ export class OrderAdminController {
         messageKey: 'order.success.list',
     })
     public async getAllOrders(
-        @Query(new QueryTransformPipe()) query: OrderListQueryDto
+        @Query(new QueryTransformPipe()) query: OrderListQueryDto,
+        @AuthUser() user: IAuthUser
     ): Promise<ApiPaginatedDataDto<OrderDetailResponseDto>> {
         return this.orderService.getAllOrders({
             page: query.page,
             limit: query.limit,
             status: query.status,
             userId: query.userId,
+            requesterId: user.userId,
+            requesterRole: user.role,
         });
     }
 
@@ -81,9 +85,13 @@ export class OrderAdminController {
         messageKey: 'order.success.orderFound',
     })
     public async getOrderDetail(
-        @Param('id') orderId: string
+        @Param('id') orderId: string,
+        @AuthUser() user: IAuthUser
     ): Promise<OrderDetailResponseDto> {
-        return this.orderService.getOrderDetail(orderId, undefined, true);
+        return this.orderService.getOrderDetail(orderId, undefined, true, {
+            id: user.userId,
+            role: user.role,
+        });
     }
 
     @Put(':id/status')
@@ -94,6 +102,8 @@ export class OrderAdminController {
         resourceIdParam: 'id',
         severity: ActivityLogSeverity.WARNING,
     })
+    // Whole-order operation — intentionally excludes ALLIANCE (it would affect
+    // items the alliance does not own).
     @AllowedRoles(STAFF_OPERATIONS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Update order status' })
@@ -116,7 +126,7 @@ export class OrderAdminController {
         resourceType: 'Order',
         resourceIdParam: 'id',
     })
-    @AllowedRoles(STAFF_OPERATIONS_ROLES)
+    @AllowedRoles(ITEM_OPERATIONS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Manually deliver order' })
     @DocResponse({
@@ -126,8 +136,14 @@ export class OrderAdminController {
     })
     public async deliverOrder(
         @Param('id') orderId: string,
-        @Body() payload: OrderDeliverDto
+        @Body() payload: OrderDeliverDto,
+        @AuthUser() user: IAuthUser
     ): Promise<OrderResponseDto> {
+        await this.orderService.assertCanActOnOrderItems(
+            orderId,
+            (payload.items ?? []).map(item => item.itemId),
+            user
+        );
         return this.deliveryService.deliverOrder(orderId, payload);
     }
 
@@ -138,6 +154,7 @@ export class OrderAdminController {
         resourceType: 'Order',
         resourceIdParam: 'id',
     })
+    // Whole-order/wallet operation — intentionally excludes ALLIANCE.
     @AllowedRoles(SUPPORT_HANDLING_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Refund order' })
@@ -159,7 +176,7 @@ export class OrderAdminController {
         resourceIdParam: 'id',
         severity: ActivityLogSeverity.WARNING,
     })
-    @AllowedRoles(SUPPORT_HANDLING_ROLES)
+    @AllowedRoles(ITEM_OPERATIONS_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({
         summary: 'Issue replacement gift-card content for selected order items',
@@ -173,6 +190,11 @@ export class OrderAdminController {
         @Param('id') orderId: string,
         @Body() payload: OrderIssueReplacementDto
     ): Promise<ApiGenericResponseDto> {
+        await this.orderService.assertCanActOnOrderItems(
+            orderId,
+            payload.orderItemIds ?? [],
+            user
+        );
         return this.orderService.issueReplacement(
             orderId,
             user.userId,
@@ -188,6 +210,7 @@ export class OrderAdminController {
         resourceIdParam: 'id',
         severity: ActivityLogSeverity.WARNING,
     })
+    // Whole-order/wallet operation — intentionally excludes ALLIANCE.
     @AllowedRoles(SUPPORT_HANDLING_ROLES)
     @ApiBearerAuth('accessToken')
     @ApiOperation({

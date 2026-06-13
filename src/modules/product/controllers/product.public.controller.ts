@@ -53,6 +53,7 @@ export class ProductPublicController {
             isRestocked: query.isRestocked,
             sortBy: query.sortBy,
             sortOrder: query.sortOrder,
+            priorityFlag: query.priorityFlag,
         });
     }
 

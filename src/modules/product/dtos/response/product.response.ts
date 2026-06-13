@@ -247,12 +247,6 @@ export class ProductResponseDto implements Product {
     @IsString()
     flair: string | null;
 
-    @ApiPropertyOptional({ nullable: true })
-    @Expose()
-    @IsOptional()
-    @IsString()
-    iconUrl: string | null;
-
     @ApiProperty({ example: false })
     @Expose()
     @IsBoolean()

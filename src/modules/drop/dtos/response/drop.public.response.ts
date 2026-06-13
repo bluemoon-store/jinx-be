@@ -40,12 +40,6 @@ export class DropPublicProductDto {
     @IsString()
     slug: string;
 
-    @ApiPropertyOptional({ nullable: true })
-    @Expose()
-    @IsOptional()
-    @IsString()
-    iconUrl: string | null;
-
     @ApiProperty({ type: [DropPublicProductImageDto] })
     @Expose()
     @Type(() => DropPublicProductImageDto)

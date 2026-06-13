@@ -305,26 +305,40 @@ export class ProductService implements IProductService {
         isRestocked?: boolean;
         sortBy?: string;
         sortOrder?: SortOrder;
+        priorityFlag?: 'isNew' | 'isHot' | 'isRestocked';
     }): Prisma.ProductOrderByWithRelationInput[] {
         const requested = options.sortBy as
             | keyof Prisma.ProductOrderByWithRelationInput
             | undefined;
 
-        if (requested && this.publicListSortableFields.has(requested)) {
-            const direction: 'asc' | 'desc' =
-                options.sortOrder === SortOrder.ASC ? 'asc' : 'desc';
+        const base: Prisma.ProductOrderByWithRelationInput[] =
+            requested && this.publicListSortableFields.has(requested)
+                ? [
+                      {
+                          [requested]:
+                              options.sortOrder === SortOrder.ASC
+                                  ? 'asc'
+                                  : 'desc',
+                      } as Prisma.ProductOrderByWithRelationInput,
+                  ]
+                : this.listOrderBy({
+                      isHot: options.isHot,
+                      isNew: options.isNew,
+                      isRestocked: options.isRestocked,
+                  });
+
+        // Prioritise flagged products to the top without filtering them out
+        // (boolean desc puts `true` first), then fall back to the base order.
+        if (options.priorityFlag) {
             return [
                 {
-                    [requested]: direction,
+                    [options.priorityFlag]: 'desc',
                 } as Prisma.ProductOrderByWithRelationInput,
+                ...base,
             ];
         }
 
-        return this.listOrderBy({
-            isHot: options.isHot,
-            isNew: options.isNew,
-            isRestocked: options.isRestocked,
-        });
+        return base;
     }
 
     /**
@@ -471,7 +485,6 @@ export class ProductService implements IProductService {
                     deliveryContent: data.deliveryContent,
                     shortNotice: data.shortNotice,
                     flair: data.flair ?? null,
-                    iconUrl: data.iconUrl ?? null,
                     isHot: data.isHot ?? false,
                     isNew: data.isNew ?? false,
                     isNFA: data.isNFA ?? false,
@@ -553,6 +566,7 @@ export class ProductService implements IProductService {
         type?: ProductType;
         sortBy?: string;
         sortOrder?: SortOrder;
+        priorityFlag?: 'isNew' | 'isHot' | 'isRestocked';
         requesterId?: string;
         requesterRole?: Role;
     }): Promise<ApiPaginatedDataDto<ProductListResponseDto>> {
@@ -575,6 +589,7 @@ export class ProductService implements IProductService {
                 isRestocked: options?.isRestocked,
                 sortBy: options?.sortBy,
                 sortOrder: options?.sortOrder,
+                priorityFlag: options?.priorityFlag,
             });
 
             const result = await this.paginateInStockFirst(
@@ -897,7 +912,6 @@ export class ProductService implements IProductService {
             assignScalar('deliveryContent', rest.deliveryContent);
             assignScalar('shortNotice', rest.shortNotice);
             assignScalar('flair', rest.flair);
-            assignScalar('iconUrl', rest.iconUrl);
             assignScalar('isHot', rest.isHot);
             assignScalar('isNew', rest.isNew);
             assignScalar('isNFA', rest.isNFA);

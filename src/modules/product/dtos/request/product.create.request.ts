@@ -178,13 +178,6 @@ export class ProductCreateDto {
     @MaxLength(100)
     flair?: string;
 
-    @ApiPropertyOptional({
-        description: 'Product icon URL (used in cart and compact displays)',
-    })
-    @IsOptional()
-    @IsString()
-    iconUrl?: string;
-
     @ApiPropertyOptional({ default: false })
     @IsOptional()
     @IsBoolean()

@@ -158,7 +158,6 @@ model Product {
 
   shortNotice     String?   @map("short_notice")
   flair           String?   @map("flair")
-  iconUrl         String?   @map("icon_url")
   isHot           Boolean   @default(false) @map("is_hot")
   isNew           Boolean   @default(false) @map("is_new")
   isNFA           Boolean   @default(false) @map("is_nfa")

@@ -5,6 +5,7 @@ import {
     IsString,
     IsBoolean,
     IsEnum,
+    IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ProductType } from '@prisma/client';
@@ -113,4 +114,13 @@ export class ProductListQueryDto {
     @IsOptional()
     @IsEnum(SortOrder)
     sortOrder?: SortOrder;
+
+    @ApiPropertyOptional({
+        description:
+            'Prioritise products with this flag to the top WITHOUT filtering them out (e.g. isNew-flagged first, then by sortBy).',
+        enum: ['isNew', 'isHot', 'isRestocked'],
+    })
+    @IsOptional()
+    @IsIn(['isNew', 'isHot', 'isRestocked'])
+    priorityFlag?: 'isNew' | 'isHot' | 'isRestocked';
 }
