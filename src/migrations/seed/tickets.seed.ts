@@ -32,7 +32,7 @@ export class TicketsSeedService {
             return;
         }
 
-        const user = await this.databaseService.user.findUnique({
+        const user = await this.databaseService.user.findFirst({
             where: { email: SEED_EMAIL },
         });
 

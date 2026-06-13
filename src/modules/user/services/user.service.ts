@@ -420,10 +420,13 @@ export class UserService implements IUserService {
         const userName = dto.userName.trim().toLowerCase();
 
         try {
+            // Admin-created accounts are CUSTOMER (USER) accounts, so an email
+            // collision only matters within the customer bucket; a team account
+            // with the same email is allowed. userName stays globally unique.
             const existing = await this.databaseService.user.findFirst({
                 where: {
                     deletedAt: null,
-                    OR: [{ email }, { userName }],
+                    OR: [{ email, role: Role.USER }, { userName }],
                 },
             });
 

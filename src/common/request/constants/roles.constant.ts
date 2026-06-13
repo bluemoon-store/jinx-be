@@ -68,3 +68,17 @@ export function isAdminStaffRole(role: Role): boolean {
 export function isPrivilegedAdminRole(role: Role): boolean {
     return isSuperAdminRole(role) || isAdminStaffRole(role);
 }
+
+/**
+ * Account "bucket" for email-uniqueness. An email may have at most one live
+ * CUSTOMER account (storefront end-user, role USER) and one live TEAM account
+ * (any staff/admin role). Login/forgot-password are split by portal accordingly.
+ */
+export function isCustomerRole(role: Role): boolean {
+    return role === Role.USER;
+}
+
+/** TEAM bucket: any staff/admin account (everything that is not a plain USER). */
+export function isTeamRole(role: Role): boolean {
+    return role !== Role.USER;
+}

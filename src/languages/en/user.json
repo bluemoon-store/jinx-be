@@ -35,6 +35,8 @@
         "failedToGetUserStats": "Failed to retrieve user statistics",
         "alreadyExists": "Email or username already taken",
         "emailAlreadyTaken": "Email already taken",
-        "usernameAlreadyTaken": "Username already taken"
+        "usernameAlreadyTaken": "Username already taken",
+        "cannotDeleteSelf": "You cannot delete your own account",
+        "cannotDeleteSuperAdmin": "You do not have permission to delete a super admin"
     }
 }

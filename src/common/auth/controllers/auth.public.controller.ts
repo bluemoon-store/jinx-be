@@ -256,6 +256,72 @@ export class AuthPublicController {
         return this.authService.resetPasswordLink(payload);
     }
 
+    // --- Admin-portal password reset (scoped to the TEAM account for the
+    // email). Separate from the customer endpoints above so an email that has
+    // both a customer and a team account can reset each independently.
+    // The link-based completion reuses the token-based /auth/reset-password-link
+    // (bucket-agnostic), so no admin variant is needed for that step.
+
+    @Post('admin/forgot-password')
+    @PublicRoute()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Request admin password reset OTP' })
+    @DocResponse({
+        serialization: AuthSuccessResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'auth.success.forgotPassword',
+    })
+    public adminForgotPassword(
+        @Body() payload: ForgotPasswordDto
+    ): Promise<AuthSuccessResponseDto> {
+        return this.authService.adminForgotPassword(payload);
+    }
+
+    @Post('admin/forgot-password-link')
+    @PublicRoute()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Request admin password reset link (email)' })
+    @DocResponse({
+        serialization: AuthSuccessResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'auth.success.forgotPassword',
+    })
+    public adminForgotPasswordLink(
+        @Body() payload: ForgotPasswordDto
+    ): Promise<AuthSuccessResponseDto> {
+        return this.authService.adminForgotPasswordLink(payload);
+    }
+
+    @Post('admin/verify-reset-otp')
+    @PublicRoute()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Verify admin password reset OTP' })
+    @DocResponse({
+        serialization: AuthSuccessResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'auth.success.otpVerified',
+    })
+    public adminVerifyResetOtp(
+        @Body() payload: VerifyOtpDto
+    ): Promise<AuthSuccessResponseDto> {
+        return this.authService.adminVerifyResetOtp(payload);
+    }
+
+    @Post('admin/reset-password')
+    @PublicRoute()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Reset admin password with OTP' })
+    @DocResponse({
+        serialization: AuthSuccessResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'auth.success.passwordReset',
+    })
+    public adminResetPassword(
+        @Body() payload: ResetPasswordDto
+    ): Promise<AuthSuccessResponseDto> {
+        return this.authService.adminResetPassword(payload);
+    }
+
     @Put('change-password')
     @UseGuards(JwtAccessGuard)
     @ApiBearerAuth('accessToken')

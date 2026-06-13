@@ -75,8 +75,10 @@ export class AuthService implements IAuthService {
         try {
             const { email, password } = data;
 
-            const user = await this.databaseService.user.findUnique({
-                where: { email },
+            // Customer portal: authenticate the CUSTOMER (USER) account only.
+            // A team-only email has no customer account here -> generic 401.
+            const user = await this.databaseService.user.findFirst({
+                where: { email, role: Role.USER },
             });
 
             if (!user) {
@@ -210,8 +212,9 @@ export class AuthService implements IAuthService {
     ): Promise<AdminLoginChallengeResponseDto | AuthResponseDto> {
         const { email, password } = data;
 
-        const user = await this.databaseService.user.findUnique({
-            where: { email },
+        // Admin portal: authenticate the TEAM (non-USER) account only.
+        const user = await this.databaseService.user.findFirst({
+            where: { email, role: { not: Role.USER } },
         });
 
         if (!user) {
@@ -390,8 +393,10 @@ export class AuthService implements IAuthService {
         try {
             const { email, firstName, lastName, password } = data;
 
-            const existingUser = await this.databaseService.user.findUnique({
-                where: { email },
+            // Signup creates a CUSTOMER (USER) account. Only a live customer
+            // account with this email blocks it; a team account may share it.
+            const existingUser = await this.databaseService.user.findFirst({
+                where: { email, role: Role.USER, deletedAt: null },
             });
 
             if (existingUser) {
@@ -404,16 +409,31 @@ export class AuthService implements IAuthService {
             const hashed =
                 await this.helperEncryptionService.createHash(password);
 
-            const createdUser = await this.databaseService.user.create({
-                data: {
-                    email,
-                    password: hashed,
-                    firstName: firstName?.trim(),
-                    lastName: lastName?.trim(),
-                    role: Role.USER,
-                    userName: faker.internet.username(),
-                },
-            });
+            let createdUser;
+            try {
+                createdUser = await this.databaseService.user.create({
+                    data: {
+                        email,
+                        password: hashed,
+                        firstName: firstName?.trim(),
+                        lastName: lastName?.trim(),
+                        role: Role.USER,
+                        userName: faker.internet.username(),
+                    },
+                });
+            } catch (error) {
+                // DB backstop for a concurrent signup race (partial customer index).
+                if (
+                    error instanceof Prisma.PrismaClientKnownRequestError &&
+                    error.code === 'P2002'
+                ) {
+                    throw new HttpException(
+                        'user.error.userExists',
+                        HttpStatus.CONFLICT
+                    );
+                }
+                throw error;
+            }
 
             // Create wallet for new user
             await this.walletService.createWallet(createdUser.id);
@@ -658,14 +678,41 @@ export class AuthService implements IAuthService {
         }
     }
 
-    public async forgotPassword(
+    /**
+     * Resolve the account targeted by an email-based password-reset flow.
+     * Scoped by portal bucket: the customer `/auth/*` endpoints reset the
+     * CUSTOMER (USER) account; the admin `/auth/admin/*` endpoints reset the
+     * TEAM (non-USER) account. Soft-deleted rows are excluded.
+     */
+    private findResettableUser(email: string, bucket: 'customer' | 'team') {
+        return this.databaseService.user.findFirst({
+            where: {
+                email,
+                deletedAt: null,
+                role: bucket === 'customer' ? Role.USER : { not: Role.USER },
+            },
+        });
+    }
+
+    public forgotPassword(
         data: ForgotPasswordDto
     ): Promise<AuthSuccessResponseDto> {
-        const user = await this.databaseService.user.findUnique({
-            where: { email: data.email },
-        });
+        return this.issueForgotPasswordOtp(data, 'customer');
+    }
 
-        if (!user || user.deletedAt) {
+    public adminForgotPassword(
+        data: ForgotPasswordDto
+    ): Promise<AuthSuccessResponseDto> {
+        return this.issueForgotPasswordOtp(data, 'team');
+    }
+
+    private async issueForgotPasswordOtp(
+        data: ForgotPasswordDto,
+        bucket: 'customer' | 'team'
+    ): Promise<AuthSuccessResponseDto> {
+        const user = await this.findResettableUser(data.email, bucket);
+
+        if (!user) {
             return {
                 success: true,
                 message: 'auth.success.forgotPassword',
@@ -696,14 +743,25 @@ export class AuthService implements IAuthService {
         };
     }
 
-    public async forgotPasswordLink(
+    public forgotPasswordLink(
         data: ForgotPasswordDto
     ): Promise<AuthSuccessResponseDto> {
-        const user = await this.databaseService.user.findUnique({
-            where: { email: data.email },
-        });
+        return this.issueForgotPasswordLink(data, 'customer');
+    }
 
-        if (!user || user.deletedAt) {
+    public adminForgotPasswordLink(
+        data: ForgotPasswordDto
+    ): Promise<AuthSuccessResponseDto> {
+        return this.issueForgotPasswordLink(data, 'team');
+    }
+
+    private async issueForgotPasswordLink(
+        data: ForgotPasswordDto,
+        bucket: 'customer' | 'team'
+    ): Promise<AuthSuccessResponseDto> {
+        const user = await this.findResettableUser(data.email, bucket);
+
+        if (!user) {
             return {
                 success: true,
                 message: 'auth.success.forgotPassword',
@@ -740,14 +798,23 @@ export class AuthService implements IAuthService {
         };
     }
 
-    public async verifyOtp(
+    public verifyOtp(data: VerifyOtpDto): Promise<AuthSuccessResponseDto> {
+        return this.verifyResetOtp(data, 'customer');
+    }
+
+    public adminVerifyResetOtp(
         data: VerifyOtpDto
     ): Promise<AuthSuccessResponseDto> {
-        const user = await this.databaseService.user.findUnique({
-            where: { email: data.email },
-        });
+        return this.verifyResetOtp(data, 'team');
+    }
 
-        if (!user || user.deletedAt) {
+    private async verifyResetOtp(
+        data: VerifyOtpDto,
+        bucket: 'customer' | 'team'
+    ): Promise<AuthSuccessResponseDto> {
+        const user = await this.findResettableUser(data.email, bucket);
+
+        if (!user) {
             throw new HttpException(
                 'user.error.userNotFound',
                 HttpStatus.NOT_FOUND
@@ -762,14 +829,25 @@ export class AuthService implements IAuthService {
         };
     }
 
-    public async resetPassword(
+    public resetPassword(
         data: ResetPasswordDto
     ): Promise<AuthSuccessResponseDto> {
-        const user = await this.databaseService.user.findUnique({
-            where: { email: data.email },
-        });
+        return this.resetPasswordForBucket(data, 'customer');
+    }
 
-        if (!user || user.deletedAt) {
+    public adminResetPassword(
+        data: ResetPasswordDto
+    ): Promise<AuthSuccessResponseDto> {
+        return this.resetPasswordForBucket(data, 'team');
+    }
+
+    private async resetPasswordForBucket(
+        data: ResetPasswordDto,
+        bucket: 'customer' | 'team'
+    ): Promise<AuthSuccessResponseDto> {
+        const user = await this.findResettableUser(data.email, bucket);
+
+        if (!user) {
             throw new HttpException(
                 'user.error.userNotFound',
                 HttpStatus.NOT_FOUND
@@ -929,8 +1007,15 @@ export class AuthService implements IAuthService {
             );
         }
 
-        const existingUser = await this.databaseService.user.findUnique({
-            where: { email: nextEmail },
+        // Email only needs to be unique within the account's own bucket
+        // (one live CUSTOMER + one live TEAM per email).
+        const sameBucket =
+            user.role === Role.USER
+                ? { role: Role.USER }
+                : { role: { not: Role.USER } };
+
+        const existingUser = await this.databaseService.user.findFirst({
+            where: { email: nextEmail, deletedAt: null, ...sameBucket },
         });
 
         if (existingUser && existingUser.id !== userId) {

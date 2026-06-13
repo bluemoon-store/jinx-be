@@ -13,7 +13,11 @@ datasource db {
 model User {
   id          String    @id @default(uuid())
   userName    String    @unique
-  email       String    @unique
+  // Not globally unique: an email may have one CUSTOMER (role USER) account and
+  // one TEAM (non-USER) account. Live-per-bucket uniqueness is enforced by two
+  // partial unique indexes in the migration (Prisma can't express partial
+  // indexes), so `email` intentionally has no @unique here.
+  email       String
   password    String
   firstName   String?   @map("first_name")
   lastName    String?   @map("last_name")
@@ -64,6 +68,7 @@ model User {
   dropClaimVouches DropClaimVouch[]
   createdProducts  Product[]        @relation("CreatedProducts")
 
+  @@index([email])
   @@map("users")
 }
 

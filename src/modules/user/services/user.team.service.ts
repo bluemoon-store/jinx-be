@@ -8,6 +8,8 @@ import { Queue } from 'bull';
 
 import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { AcceptInvitationRequestDto } from 'src/common/auth/dtos/request/accept-invitation.request';
+import { isSuperAdminRole } from 'src/common/request/constants/roles.constant';
+import { IAuthUser } from 'src/common/request/interfaces/request.interface';
 import { DatabaseService } from 'src/common/database/services/database.service';
 import { EMAIL_TEMPLATES } from 'src/common/email/enums/email-template.enum';
 import {
@@ -66,12 +68,16 @@ export class UserTeamService {
         payload: TeamInviteRequestDto,
         invitedByUserId: string
     ) {
-        const existing = await this.databaseService.user.findUnique({
-            where: { email: payload.email },
+        // Only a TEAM (non-USER) account blocks the invite — a customer (USER)
+        // account with the same email is fine and gets its own team account.
+        const existingTeam = await this.databaseService.user.findFirst({
+            where: {
+                email: payload.email,
+                role: { not: Role.USER },
+                deletedAt: null,
+            },
         });
-        // Only an active (non-deleted) account blocks the email. A soft-deleted
-        // row with the same email is revived below instead of rejected.
-        if (existing && existing.deletedAt === null) {
+        if (existingTeam) {
             throw new HttpException(
                 'user.error.userExists',
                 HttpStatus.CONFLICT
@@ -107,11 +113,17 @@ export class UserTeamService {
         const hashedTemporaryPassword =
             await this.helperEncryptionService.createHash(temporaryPassword);
 
-        // A soft-deleted account with this email is revived rather than
-        // re-created, since the email/userName unique constraints still cover
-        // deleted rows at the DB level.
-        const reviveTargetId =
-            existing && existing.deletedAt !== null ? existing.id : null;
+        // A soft-deleted TEAM account with this email is revived rather than
+        // re-created. (Scoped to the team bucket so a deleted customer account
+        // with the same email is never touched by an invite.)
+        const deletedTeam = await this.databaseService.user.findFirst({
+            where: {
+                email: payload.email,
+                role: { not: Role.USER },
+                deletedAt: { not: null },
+            },
+        });
+        const reviveTargetId = deletedTeam ? deletedTeam.id : null;
 
         let created;
         try {
@@ -244,7 +256,10 @@ export class UserTeamService {
         };
     }
 
-    public async removeTeamMember(id: string): Promise<ApiGenericResponseDto> {
+    public async removeTeamMember(
+        id: string,
+        requester: IAuthUser
+    ): Promise<ApiGenericResponseDto> {
         const user = await this.databaseService.user.findUnique({
             where: { id },
         });
@@ -253,6 +268,23 @@ export class UserTeamService {
                 'user.error.userNotFound',
                 HttpStatus.NOT_FOUND
             );
+        }
+
+        // SUPER_ADMIN bypasses these guards; OWNER cannot delete themselves
+        // or any SUPER_ADMIN account.
+        if (!isSuperAdminRole(requester.role)) {
+            if (requester.userId === id) {
+                throw new HttpException(
+                    'user.error.cannotDeleteSelf',
+                    HttpStatus.FORBIDDEN
+                );
+            }
+            if (isSuperAdminRole(user.role)) {
+                throw new HttpException(
+                    'user.error.cannotDeleteSuperAdmin',
+                    HttpStatus.FORBIDDEN
+                );
+            }
         }
 
         const now = new Date();

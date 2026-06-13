@@ -68,6 +68,7 @@ const listInclude = {
             lastName: true,
             userName: true,
             email: true,
+            role: true,
         },
     },
 } satisfies Prisma.ProductInclude;
@@ -124,6 +125,7 @@ export class ProductService implements IProductService {
               creator.userName ||
               creator.email
             : null;
+        const createdByRole = creator?.role ?? null;
         return {
             ...product,
             variants,
@@ -132,6 +134,7 @@ export class ProductService implements IProductService {
             tags,
             createdById: product.createdById ?? null,
             createdByName,
+            createdByRole,
         } as ProductListResponseDto;
     }
 

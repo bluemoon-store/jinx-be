@@ -6,6 +6,7 @@ import {
     Product,
     ProductImage,
     ProductType,
+    Role,
 } from '@prisma/client';
 import { Expose, Type } from 'class-transformer';
 import {
@@ -423,6 +424,16 @@ export class ProductListResponseDto extends ProductResponseDto {
     @IsOptional()
     @IsString()
     createdByName?: string | null;
+
+    @ApiPropertyOptional({
+        description: 'Role of the user who created the product',
+        enum: Role,
+        nullable: true,
+    })
+    @Expose()
+    @IsOptional()
+    @IsEnum(Role)
+    createdByRole?: Role | null;
 }
 
 export class ProductDetailResponseDto extends ProductListResponseDto {

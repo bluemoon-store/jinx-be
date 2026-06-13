@@ -75,7 +75,7 @@ export class UserTeamController {
     }
 
     @Delete(':id')
-    @AllowedRoles([Role.SUPER_ADMIN])
+    @AllowedRoles([Role.OWNER])
     @ApiBearerAuth('accessToken')
     @ApiOperation({ summary: 'Delete team member' })
     @AuditLog({
@@ -89,8 +89,11 @@ export class UserTeamController {
         httpStatus: HttpStatus.OK,
         messageKey: 'user.success.deleted',
     })
-    public removeTeamMember(@Param('id') id: string) {
-        return this.userTeamService.removeTeamMember(id);
+    public removeTeamMember(
+        @Param('id') id: string,
+        @AuthUser() user: IAuthUser
+    ) {
+        return this.userTeamService.removeTeamMember(id, user);
     }
 
     @Post(':id/resend-invite')

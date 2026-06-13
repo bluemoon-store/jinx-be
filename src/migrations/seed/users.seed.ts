@@ -23,7 +23,7 @@ export class UsersSeedService {
         describe: 'Seed one dev user (verified, full profile) + wallet',
     })
     async seed(): Promise<void> {
-        const existing = await this.databaseService.user.findUnique({
+        const existing = await this.databaseService.user.findFirst({
             where: { email: SEED_EMAIL },
         });
 

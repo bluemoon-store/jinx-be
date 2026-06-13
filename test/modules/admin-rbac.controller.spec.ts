@@ -47,7 +47,6 @@ import { WalletAdminController } from 'src/modules/wallet/controllers/wallet.adm
 type ControllerClass = { prototype: Record<string, unknown> };
 
 const OWNER_ONLY_ROLES = [Role.OWNER];
-const SUPER_ADMIN_ONLY_ROLES = [Role.SUPER_ADMIN];
 const STAFF_ROLES = [
     Role.OWNER,
     Role.MOD,
@@ -336,6 +335,7 @@ describe('Admin RBAC controller metadata', () => {
                 'inviteTeamMember',
                 'updateTeamMember',
                 'resendInvite',
+                'removeTeamMember',
             ]) {
                 expectMethodRoles(
                     UserTeamController,
@@ -343,12 +343,6 @@ describe('Admin RBAC controller metadata', () => {
                     OWNER_ONLY_ROLES
                 );
             }
-
-            expectMethodRoles(
-                UserTeamController,
-                'removeTeamMember',
-                SUPER_ADMIN_ONLY_ROLES
-            );
         });
 
         it('keeps crypto payment operations on operations and financial role sets', () => {
