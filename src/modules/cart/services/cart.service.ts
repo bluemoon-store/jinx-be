@@ -25,7 +25,7 @@ export class CartService implements ICartService {
      */
     private async validateProductLine(
         productId: string,
-        quantity: number,
+        _quantity: number,
         variantId?: string | null
     ): Promise<{ unitPrice: string }> {
         const product = await this.databaseService.product.findFirst({
