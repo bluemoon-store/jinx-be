@@ -5,6 +5,8 @@ import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { DatabaseModule } from 'src/common/database/database.module';
 import { HelperModule } from 'src/common/helper/helper.module';
 import { CustomerMetricsService } from 'src/modules/dashboard/services/customer-metrics.service';
+import { DashboardReportService } from 'src/modules/dashboard/services/dashboard-report.service';
+import { DashboardService } from 'src/modules/dashboard/services/dashboard.service';
 import { SalesMetricsService } from 'src/modules/dashboard/services/sales-metrics.service';
 import { OrderImageService } from 'src/modules/order/services/order-image.service';
 import { workerOnlyProviders } from 'src/common/utils/role.util';
@@ -35,6 +37,8 @@ const workers = workerOnlyProviders([
         OrderImageService,
         SalesMetricsService,
         CustomerMetricsService,
+        DashboardService,
+        DashboardReportService,
     ],
     exports: workers,
 })

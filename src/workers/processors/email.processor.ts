@@ -20,7 +20,9 @@ import {
     IWalletTopUpSuccessfulPayload,
     IWelcomeToJinxManagementPayload,
 } from 'src/common/helper/interfaces/email.interface';
+import { IEmailAttachment } from 'src/common/email/interfaces/smtp.service.interface';
 import { HelperEmailService } from 'src/common/helper/services/helper.email.service';
+import { DashboardReportService } from 'src/modules/dashboard/services/dashboard-report.service';
 import { OrderImageService } from 'src/modules/order/services/order-image.service';
 
 @Processor(APP_BULL_QUEUES.EMAIL)
@@ -28,6 +30,7 @@ export class EmailProcessorWorker {
     constructor(
         private readonly helperEmailService: HelperEmailService,
         private readonly orderImageService: OrderImageService,
+        private readonly dashboardReportService: DashboardReportService,
         private readonly logger: PinoLogger
     ) {
         this.logger.setContext(EmailProcessorWorker.name);
@@ -232,10 +235,54 @@ export class EmailProcessorWorker {
     async processMonthlyStoreReport(
         job: Job<ISendEmailBasePayload<IMonthlyStoreReportPayload>>
     ) {
-        await this.dispatch(
-            job,
-            EMAIL_TEMPLATES.MONTHLY_STORE_REPORT,
-            'monthly-store-report'
+        const { toEmails, data } = job.data;
+        this.logger.info(
+            { jobId: job.id, recipients: toEmails.length },
+            'Processing monthly-store-report email job'
         );
+
+        try {
+            // Best-effort dashboard report PDF; never blocks the email on failure.
+            let attachment: IEmailAttachment | undefined;
+            try {
+                const buffer =
+                    await this.dashboardReportService.generateMonthlyReport(
+                        new Date()
+                    );
+                const month = new Date().toISOString().slice(0, 7); // YYYY-MM
+                attachment = {
+                    filename: `dashboard-report-${month}.pdf`,
+                    content: buffer,
+                    contentType: 'application/pdf',
+                };
+            } catch (pdfError) {
+                this.logger.warn(
+                    { jobId: job.id, error: pdfError?.message },
+                    'Failed to render dashboard report PDF; sending email without it'
+                );
+            }
+
+            await this.helperEmailService.sendEmail({
+                emails: toEmails,
+                emailType: EMAIL_TEMPLATES.MONTHLY_STORE_REPORT,
+                payload: data,
+                attachments: attachment ? [attachment] : undefined,
+            });
+
+            this.logger.info(
+                {
+                    jobId: job.id,
+                    recipients: toEmails.length,
+                    withPdf: !!attachment,
+                },
+                'monthly-store-report emails sent successfully'
+            );
+        } catch (error) {
+            this.logger.error(
+                { jobId: job.id, error: error.message },
+                `Failed to send monthly-store-report emails: ${error.message}`
+            );
+            throw error;
+        }
     }
 }
