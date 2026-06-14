@@ -24,6 +24,8 @@ import {
     ISendEmailBasePayload,
 } from 'src/common/helper/interfaces/email.interface';
 import { StockLineService } from 'src/modules/stock-line/services/stock-line.service';
+import { PAYMENT_CRYPTO_CODES } from 'src/modules/settings/constants/payment-settings.constant';
+import { SettingsService } from 'src/modules/settings/services/settings.service';
 import { SystemWalletService } from './system-wallet.service';
 import { ExchangeRateService } from './exchange-rate.service';
 import { ICryptoPaymentService } from '../interfaces/crypto-payment.service.interface';
@@ -50,6 +52,7 @@ export class CryptoPaymentService implements ICryptoPaymentService {
         @InjectQueue(APP_BULL_QUEUES.EMAIL)
         private readonly emailQueue: Queue,
         private readonly stockLineService: StockLineService,
+        private readonly settingsService: SettingsService,
         private readonly logger: PinoLogger
     ) {
         this.logger.setContext(CryptoPaymentService.name);
@@ -97,6 +100,21 @@ export class CryptoPaymentService implements ICryptoPaymentService {
             }
 
             this.assertCryptoOrderAccess(order, userId);
+
+            // Reject a method that an admin has disabled. Only enforce for codes
+            // that are admin-configurable; others (e.g. USDC_ERC20) stay allowed.
+            const { cryptocurrencies: enabledCryptos } =
+                await this.settingsService.getEnabledPaymentMethods();
+            if (
+                (PAYMENT_CRYPTO_CODES as readonly string[]).includes(
+                    cryptocurrency
+                ) &&
+                !enabledCryptos.includes(cryptocurrency)
+            ) {
+                throw new BadRequestException(
+                    `Payment method ${cryptocurrency} is currently unavailable`
+                );
+            }
 
             // Check if order is in valid status
             if (order.status !== OrderStatus.PENDING) {

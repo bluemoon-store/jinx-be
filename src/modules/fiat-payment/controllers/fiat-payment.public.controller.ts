@@ -35,7 +35,8 @@ export class FiatPaymentPublicController {
             orderId,
             dto.gateway,
             user.userId,
-            dto.returnUrl
+            dto.returnUrl,
+            dto.method
         );
     }
 

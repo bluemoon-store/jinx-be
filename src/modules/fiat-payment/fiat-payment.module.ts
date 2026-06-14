@@ -8,6 +8,7 @@ import { RequestModule } from 'src/common/request/request.module';
 import { CustomLoggerModule } from 'src/common/logger/logger.module';
 import { workerOnlyProviders } from 'src/common/utils/role.util';
 import { OrderModule } from 'src/modules/order/order.module';
+import { SettingsModule } from 'src/modules/settings/settings.module';
 import { StockLineModule } from 'src/modules/stock-line/stock-line.module';
 
 import { FIAT_PAYMENT_QUEUE } from './fiat-payment.constants';
@@ -26,6 +27,7 @@ import { FiatPaymentWebhookController } from './controllers/fiat-payment.webhook
         RequestModule,
         CustomLoggerModule, // PinoLogger
         OrderModule, // OrderDeliveryService
+        SettingsModule, // SettingsService (enabled-method enforcement)
         StockLineModule, // StockLineService
         BullModule.registerQueue({ name: FIAT_PAYMENT_QUEUE }),
         BullModule.registerQueue({ name: APP_BULL_QUEUES.EMAIL }),

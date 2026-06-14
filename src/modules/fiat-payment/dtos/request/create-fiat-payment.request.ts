@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsOptional, IsUrl } from 'class-validator';
+import { IsEnum, IsIn, IsNotEmpty, IsOptional, IsUrl } from 'class-validator';
 import { PaymentGateway } from '@prisma/client';
 
 export class CreateFiatPaymentDto {
@@ -20,4 +20,15 @@ export class CreateFiatPaymentDto {
     @IsOptional()
     @IsUrl({ require_tld: false })
     returnUrl?: string;
+
+    @ApiPropertyOptional({
+        description:
+            'Storefront method variant. Both ride the CHIME hosted checkout, ' +
+            'but map to distinct admin toggles (card -> CHIME, cashapp -> CASHAPP).',
+        enum: ['card', 'cashapp'],
+        example: 'card',
+    })
+    @IsOptional()
+    @IsIn(['card', 'cashapp'])
+    method?: 'card' | 'cashapp';
 }

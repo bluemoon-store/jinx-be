@@ -30,6 +30,7 @@ import {
     ISendEmailBasePayload,
 } from 'src/common/helper/interfaces/email.interface';
 import { OrderDeliveryService } from 'src/modules/order/services/order-delivery.service';
+import { SettingsService } from 'src/modules/settings/services/settings.service';
 import { StockLineService } from 'src/modules/stock-line/services/stock-line.service';
 
 import { FIAT_PAYMENT_QUEUE } from '../fiat-payment.constants';
@@ -63,6 +64,7 @@ export class FiatPaymentService {
         private readonly gatewayFactory: PaymentGatewayFactory,
         private readonly deliveryService: OrderDeliveryService,
         private readonly stockLineService: StockLineService,
+        private readonly settingsService: SettingsService,
         private readonly configService: ConfigService,
         @InjectQueue(FIAT_PAYMENT_QUEUE)
         private readonly fiatPaymentQueue: Queue,
@@ -88,9 +90,13 @@ export class FiatPaymentService {
         orderId: string,
         gateway: PaymentGateway,
         userId: string,
-        returnUrl?: string
+        returnUrl?: string,
+        method?: 'card' | 'cashapp'
     ): Promise<FiatPaymentResponseDto> {
-        this.logger.info({ orderId, gateway, userId }, 'Creating fiat payment');
+        this.logger.info(
+            { orderId, gateway, method, userId },
+            'Creating fiat payment'
+        );
 
         try {
             const order = await this.databaseService.order.findUnique({
@@ -102,6 +108,18 @@ export class FiatPaymentService {
                 throw new NotFoundException(`Order not found: ${orderId}`);
             }
             this.assertOrderAccess(order, userId);
+
+            // Reject a method an admin has disabled. Card and Cash App both ride
+            // the CHIME gateway, so the storefront's `method` is what maps each
+            // to its own admin toggle (card -> CHIME, cashapp -> CASHAPP).
+            const gatewayCode = method === 'cashapp' ? 'CASHAPP' : 'CHIME';
+            const { gateways: enabledGateways } =
+                await this.settingsService.getEnabledPaymentMethods();
+            if (!enabledGateways.includes(gatewayCode)) {
+                throw new BadRequestException(
+                    'This payment method is currently unavailable'
+                );
+            }
 
             if (order.status !== OrderStatus.PENDING) {
                 throw new BadRequestException(

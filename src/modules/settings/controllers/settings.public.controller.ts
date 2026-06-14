@@ -5,6 +5,7 @@ import { DocResponse } from 'src/common/doc/decorators/doc.response.decorator';
 import { PublicRoute } from 'src/common/request/decorators/request.public.decorator';
 
 import { SettingsLandingResponseDto } from '../dtos/response/settings.landing.response';
+import { SettingsPaymentMethodsResponseDto } from '../dtos/response/settings.payment-methods.response';
 import { SettingsPublicResponseDto } from '../dtos/response/settings.public.response';
 import { SettingsService } from '../services/settings.service';
 
@@ -35,5 +36,17 @@ export class SettingsPublicController {
     })
     async getLanding(): Promise<SettingsLandingResponseDto> {
         return this.settingsService.getLanding();
+    }
+
+    @Get('payment-methods')
+    @PublicRoute()
+    @ApiOperation({ summary: 'Get enabled payment methods' })
+    @DocResponse({
+        serialization: SettingsPaymentMethodsResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'settings.success.paymentFound',
+    })
+    async getPaymentMethods(): Promise<SettingsPaymentMethodsResponseDto> {
+        return this.settingsService.getEnabledPaymentMethods();
     }
 }

@@ -36,6 +36,7 @@ import { SettingsSocialResponseDto } from '../dtos/response/settings.social.resp
 
 const CACHE_KEY = 'settings:public';
 const LANDING_CACHE_KEY = 'settings:landing';
+const PAYMENT_METHODS_CACHE_KEY = 'settings:payment-methods';
 const CACHE_TTL_MS = 60_000;
 
 const KEYS = {
@@ -355,7 +356,47 @@ export class SettingsService {
             }
         }
 
+        // Storefront reads the enabled-methods list from a cached endpoint; drop
+        // the cache so admin toggles take effect immediately.
+        await this.cacheManager.del(PAYMENT_METHODS_CACHE_KEY);
+
         return this.getPayment();
+    }
+
+    // Public, secret-free view of which methods are enabled. Consumed by the
+    // storefront to hide disabled methods and by the payment services to reject
+    // a disabled method chosen via a direct API call.
+    async getEnabledPaymentMethods(): Promise<{
+        cryptocurrencies: string[];
+        gateways: string[];
+    }> {
+        const cached = await this.cacheManager.get<{
+            cryptocurrencies: string[];
+            gateways: string[];
+        }>(PAYMENT_METHODS_CACHE_KEY);
+        if (cached) return cached;
+
+        const rows = await this.databaseService.systemSettings.findMany({
+            where: { category: PAYMENT_SETTINGS_CATEGORY },
+            select: { key: true, value: true },
+        });
+        const byKey = new Map(rows.map(row => [row.key, row.value]));
+
+        const out = {
+            cryptocurrencies: PAYMENT_CRYPTO_CODES.filter(code =>
+                this.parseEnabled(byKey.get(this.cryptoEnabledKey(code)))
+            ),
+            gateways: PAYMENT_GATEWAY_CODES.filter(code =>
+                this.parseEnabled(byKey.get(this.gatewayEnabledKey(code)))
+            ),
+        };
+
+        await this.cacheManager.set(
+            PAYMENT_METHODS_CACHE_KEY,
+            out,
+            CACHE_TTL_MS
+        );
+        return out;
     }
 
     async getPublic(): Promise<SettingsPublicResponseDto> {
