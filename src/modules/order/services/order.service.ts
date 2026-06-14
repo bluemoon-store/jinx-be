@@ -695,9 +695,7 @@ export class OrderService implements IOrderService {
                             id: true,
                             userNumber: true,
                             email: true,
-                            userName: true,
-                            firstName: true,
-                            lastName: true,
+                            name: true,
                         },
                     },
                     items: {
@@ -1427,9 +1425,7 @@ export class OrderService implements IOrderService {
                                     id: true,
                                     userNumber: true,
                                     email: true,
-                                    userName: true,
-                                    firstName: true,
-                                    lastName: true,
+                                    name: true,
                                 },
                             },
                             items: {

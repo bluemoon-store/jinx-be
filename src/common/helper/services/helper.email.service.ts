@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import * as Handlebars from 'handlebars';
 import { PinoLogger } from 'nestjs-pino';
 
+import { DatabaseService } from 'src/common/database/services/database.service';
 import {
     EMAIL_TEMPLATES,
     EMAIL_TEMPLATE_SUBJECTS,
@@ -28,6 +29,7 @@ export class HelperEmailService implements IHelperEmailService {
     constructor(
         private readonly resendService: ResendService,
         private readonly configService: ConfigService,
+        private readonly databaseService: DatabaseService,
         private readonly logger: PinoLogger
     ) {
         this.logger.setContext(HelperEmailService.name);
@@ -42,7 +44,7 @@ export class HelperEmailService implements IHelperEmailService {
         const subject = this.resolveSubject(emailType);
         const html = this.renderTemplate(
             emailType,
-            this.mergeCommonContext(payload ?? {})
+            await this.mergeCommonContext(payload ?? {})
         );
 
         return this.resendService.send({
@@ -53,19 +55,34 @@ export class HelperEmailService implements IHelperEmailService {
         });
     }
 
-    private mergeCommonContext(
+    private async mergeCommonContext(
         payload: Record<string, any>
-    ): Record<string, any> {
+    ): Promise<Record<string, any>> {
         const links =
             this.configService.get<Record<string, string>>('app.emailLinks') ??
             {};
+
+        // Admin-managed footer links live in the DB (system_settings); these
+        // win over the ENV/config defaults. A blank value falls back to config.
+        const rows = await this.databaseService.systemSettings.findMany({
+            where: {
+                key: { in: ['telegram_link', 'discord_link', 'support_link'] },
+            },
+            select: { key: true, value: true },
+        });
+        const byKey = new Map(rows.map(row => [row.key, row.value]));
+        const dbLink = (key: string): string | undefined => {
+            const value = byKey.get(key)?.trim();
+            return value ? value : undefined;
+        };
+
         const commonContext = {
             asset_url:
                 this.configService.get<string>('app.emailAssetBaseUrl') ?? '',
             store_link: links.store ?? '',
-            telegram_link: links.telegram ?? '',
-            discord_link: links.discord ?? '',
-            support_link: links.support ?? '',
+            telegram_link: dbLink('telegram_link') ?? links.telegram ?? '',
+            discord_link: dbLink('discord_link') ?? links.discord ?? '',
+            support_link: dbLink('support_link') ?? links.support ?? '',
             terms_link: links.terms ?? '',
             privacy_link: links.privacy ?? '',
             cookies_link: links.cookies ?? '',

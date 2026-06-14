@@ -34,19 +34,7 @@ export class UserAdminListItemResponseDto {
     @ApiProperty()
     @Expose()
     @IsString()
-    userName: string;
-
-    @ApiPropertyOptional({ nullable: true })
-    @Expose()
-    @IsString()
-    @IsOptional()
-    firstName: string | null;
-
-    @ApiPropertyOptional({ nullable: true })
-    @Expose()
-    @IsString()
-    @IsOptional()
-    lastName: string | null;
+    name: string;
 
     @ApiPropertyOptional({ nullable: true })
     @Expose()

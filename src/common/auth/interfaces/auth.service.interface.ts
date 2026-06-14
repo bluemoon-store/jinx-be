@@ -10,6 +10,7 @@ import { AdminVerifyOtpDto } from '../dtos/request/auth.admin-verify-otp.dto';
 import { ChangeEmailDto } from '../dtos/request/auth.change-email.dto';
 import { ChangePasswordDto } from '../dtos/request/auth.change-password.dto';
 import { ForgotPasswordDto } from '../dtos/request/auth.forgot-password.dto';
+import { GuestCheckoutDto } from '../dtos/request/auth.guest-checkout.dto';
 import { UserLoginDto } from '../dtos/request/auth.login.dto';
 import { ResetPasswordLinkDto } from '../dtos/request/auth.reset-password-link.dto';
 import { ResetPasswordDto } from '../dtos/request/auth.reset-password.dto';
@@ -42,6 +43,7 @@ export interface IAuthService {
         data: AdminResendOtpDto
     ): Promise<AuthSuccessResponseDto>;
     signup(data: UserCreateDto): Promise<AuthResponseDto>;
+    guestCheckout(data: GuestCheckoutDto): Promise<AuthResponseDto>;
     logout(): Promise<{ success: boolean; message: string }>;
     refreshTokens(payload: IAuthUser): Promise<AuthRefreshResponseDto>;
     setupTwoFactor(

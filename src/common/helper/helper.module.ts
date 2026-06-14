@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
+import { DatabaseModule } from '../database/database.module';
 import { EmailModule } from '../email/email.module';
 import { StorageModule } from '../storage/storage.module';
 
@@ -11,7 +12,7 @@ import { HelperPrismaQueryBuilderService } from './services/helper.query.builder
 import { HelperQueryService } from './services/helper.query.service';
 
 @Module({
-    imports: [StorageModule, EmailModule],
+    imports: [StorageModule, EmailModule, DatabaseModule],
     providers: [
         JwtService,
         HelperEncryptionService,

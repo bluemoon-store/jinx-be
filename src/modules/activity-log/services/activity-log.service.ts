@@ -9,6 +9,7 @@ import {
 import { Cache } from 'cache-manager';
 import { Response } from 'express';
 import { DatabaseService } from 'src/common/database/services/database.service';
+import { csvLine } from 'src/common/helper/utils/csv.util';
 
 import { IActivityLogJobPayload } from '../interfaces/activity-log-job.interface';
 import {
@@ -19,25 +20,6 @@ import {
 const ACTORS_CACHE_KEY = 'activity-log:actors';
 const ACTORS_TTL_MS = 60_000;
 const EXPORT_ROW_CAP = 50_000;
-
-function csvLine(values: Array<string | number | null | undefined>): string {
-    return (
-        values
-            .map(v => {
-                const s =
-                    v === null || v === undefined
-                        ? ''
-                        : typeof v === 'string'
-                          ? v
-                          : String(v);
-                if (/[",\n\r]/.test(s)) {
-                    return `"${s.replace(/"/g, '""')}"`;
-                }
-                return s;
-            })
-            .join(',') + '\n'
-    );
-}
 
 export interface ActivityLogCursorPayload {
     createdAt: string;
@@ -96,19 +78,13 @@ export class ActivityLogService {
                 where: { id: payload.actorId },
                 select: {
                     email: true,
-                    firstName: true,
-                    lastName: true,
-                    userName: true,
+                    name: true,
                     role: true,
                 },
             });
             if (user) {
                 actorEmail = user.email;
-                const full = [user.firstName, user.lastName]
-                    .filter(Boolean)
-                    .join(' ')
-                    .trim();
-                actorName = full || user.userName;
+                actorName = user.name?.trim() || user.email;
                 actorRole = user.role;
             }
         }

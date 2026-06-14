@@ -125,9 +125,7 @@ export class TicketService implements ITicketService {
                         select: {
                             id: true,
                             email: true,
-                            userName: true,
-                            firstName: true,
-                            lastName: true,
+                            name: true,
                             avatar: true,
                             role: true,
                         },
@@ -136,9 +134,7 @@ export class TicketService implements ITicketService {
                         select: {
                             id: true,
                             email: true,
-                            userName: true,
-                            firstName: true,
-                            lastName: true,
+                            name: true,
                             avatar: true,
                             role: true,
                         },
@@ -162,9 +158,7 @@ export class TicketService implements ITicketService {
                             user: {
                                 select: {
                                     id: true,
-                                    userName: true,
-                                    firstName: true,
-                                    lastName: true,
+                                    name: true,
                                     avatar: true,
                                     role: true,
                                     email: true,
@@ -226,9 +220,7 @@ export class TicketService implements ITicketService {
                         select: {
                             id: true,
                             email: true,
-                            userName: true,
-                            firstName: true,
-                            lastName: true,
+                            name: true,
                             avatar: true,
                             role: true,
                         },
@@ -237,9 +229,7 @@ export class TicketService implements ITicketService {
                         select: {
                             id: true,
                             email: true,
-                            userName: true,
-                            firstName: true,
-                            lastName: true,
+                            name: true,
                             avatar: true,
                             role: true,
                         },
@@ -264,9 +254,7 @@ export class TicketService implements ITicketService {
                             user: {
                                 select: {
                                     id: true,
-                                    userName: true,
-                                    firstName: true,
-                                    lastName: true,
+                                    name: true,
                                     avatar: true,
                                     role: true,
                                     email: true,
@@ -357,9 +345,7 @@ export class TicketService implements ITicketService {
                         select: {
                             id: true,
                             email: true,
-                            userName: true,
-                            firstName: true,
-                            lastName: true,
+                            name: true,
                             avatar: true,
                             role: true,
                         },
@@ -368,9 +354,7 @@ export class TicketService implements ITicketService {
                         select: {
                             id: true,
                             email: true,
-                            userName: true,
-                            firstName: true,
-                            lastName: true,
+                            name: true,
                             avatar: true,
                             role: true,
                         },
@@ -395,9 +379,7 @@ export class TicketService implements ITicketService {
                             user: {
                                 select: {
                                     id: true,
-                                    userName: true,
-                                    firstName: true,
-                                    lastName: true,
+                                    name: true,
                                     avatar: true,
                                     role: true,
                                     email: true,
@@ -437,9 +419,7 @@ export class TicketService implements ITicketService {
                     select: {
                         id: true,
                         email: true,
-                        userName: true,
-                        firstName: true,
-                        lastName: true,
+                        name: true,
                         avatar: true,
                         role: true,
                     },
@@ -448,9 +428,7 @@ export class TicketService implements ITicketService {
                     select: {
                         id: true,
                         email: true,
-                        userName: true,
-                        firstName: true,
-                        lastName: true,
+                        name: true,
                         avatar: true,
                         role: true,
                     },
@@ -486,9 +464,7 @@ export class TicketService implements ITicketService {
                 user: {
                     select: {
                         id: true,
-                        userName: true,
-                        firstName: true,
-                        lastName: true,
+                        name: true,
                         avatar: true,
                         role: true,
                         email: true,
@@ -575,9 +551,7 @@ export class TicketService implements ITicketService {
                     select: {
                         id: true,
                         email: true,
-                        userName: true,
-                        firstName: true,
-                        lastName: true,
+                        name: true,
                         avatar: true,
                         role: true,
                     },
@@ -586,9 +560,7 @@ export class TicketService implements ITicketService {
                     select: {
                         id: true,
                         email: true,
-                        userName: true,
-                        firstName: true,
-                        lastName: true,
+                        name: true,
                         avatar: true,
                         role: true,
                     },
@@ -613,9 +585,7 @@ export class TicketService implements ITicketService {
                         user: {
                             select: {
                                 id: true,
-                                userName: true,
-                                firstName: true,
-                                lastName: true,
+                                name: true,
                                 avatar: true,
                                 role: true,
                                 email: true,
@@ -704,9 +674,7 @@ export class TicketService implements ITicketService {
                     select: {
                         id: true,
                         email: true,
-                        userName: true,
-                        firstName: true,
-                        lastName: true,
+                        name: true,
                         avatar: true,
                         role: true,
                     },
@@ -715,9 +683,7 @@ export class TicketService implements ITicketService {
                     select: {
                         id: true,
                         email: true,
-                        userName: true,
-                        firstName: true,
-                        lastName: true,
+                        name: true,
                         avatar: true,
                         role: true,
                     },
@@ -742,9 +708,7 @@ export class TicketService implements ITicketService {
                         user: {
                             select: {
                                 id: true,
-                                userName: true,
-                                firstName: true,
-                                lastName: true,
+                                name: true,
                                 avatar: true,
                                 role: true,
                                 email: true,
@@ -873,9 +837,7 @@ export class TicketService implements ITicketService {
                     select: {
                         id: true,
                         email: true,
-                        userName: true,
-                        firstName: true,
-                        lastName: true,
+                        name: true,
                         avatar: true,
                         role: true,
                     },
@@ -884,9 +846,7 @@ export class TicketService implements ITicketService {
                     select: {
                         id: true,
                         email: true,
-                        userName: true,
-                        firstName: true,
-                        lastName: true,
+                        name: true,
                         avatar: true,
                         role: true,
                     },
@@ -911,9 +871,7 @@ export class TicketService implements ITicketService {
                         user: {
                             select: {
                                 id: true,
-                                userName: true,
-                                firstName: true,
-                                lastName: true,
+                                name: true,
                                 avatar: true,
                                 role: true,
                                 email: true,

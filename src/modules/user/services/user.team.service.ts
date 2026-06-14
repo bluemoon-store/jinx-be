@@ -47,9 +47,7 @@ export class UserTeamService {
             select: {
                 id: true,
                 email: true,
-                userName: true,
-                firstName: true,
-                lastName: true,
+                name: true,
                 role: true,
                 isVerified: true,
                 createdAt: true,
@@ -81,16 +79,6 @@ export class UserTeamService {
         if (existingTeam) {
             throw new HttpException(
                 'user.error.userExists',
-                HttpStatus.CONFLICT
-            );
-        }
-
-        const userNameTaken = await this.databaseService.user.findUnique({
-            where: { userName: payload.userName },
-        });
-        if (userNameTaken && userNameTaken.deletedAt === null) {
-            throw new HttpException(
-                'user.error.userNameExists',
                 HttpStatus.CONFLICT
             );
         }
@@ -136,9 +124,8 @@ export class UserTeamService {
                       data: {
                           email: payload.email,
                           role: payload.role,
-                          userName: payload.userName,
+                          name: payload.name.trim(),
                           password: hashedTemporaryPassword,
-                          firstName: payload.name?.trim() || null,
                           isVerified: false,
                           invitedBy: invitedByUserId,
                           invitationToken,
@@ -153,9 +140,8 @@ export class UserTeamService {
                       data: {
                           email: payload.email,
                           role: payload.role,
-                          userName: payload.userName,
+                          name: payload.name.trim(),
                           password: hashedTemporaryPassword,
-                          firstName: payload.name?.trim() || null,
                           isVerified: false,
                           invitedBy: invitedByUserId,
                           invitationToken,
@@ -168,17 +154,10 @@ export class UserTeamService {
                 error instanceof Prisma.PrismaClientKnownRequestError &&
                 error.code === 'P2002'
             ) {
-                const target = (error.meta as { target?: string[] } | undefined)
-                    ?.target;
-                const targetStr = (target ?? []).join(' ').toLowerCase();
-                if (targetStr.includes('email')) {
-                    throw new HttpException(
-                        'user.error.userExists',
-                        HttpStatus.CONFLICT
-                    );
-                }
+                // Email is the only user-facing unique constraint now that the
+                // username handle is gone.
                 throw new HttpException(
-                    'user.error.userNameExists',
+                    'user.error.userExists',
                     HttpStatus.CONFLICT
                 );
             }
@@ -189,7 +168,7 @@ export class UserTeamService {
         this.activityLogEmitter.captureAfter({
             after: {
                 email: created.email,
-                userName: created.userName,
+                name: created.name,
                 role: created.role,
                 status: 'INVITED',
             },
@@ -399,22 +378,6 @@ export class UserTeamService {
             invitationTokenExpiry: null,
             deletedAt: null,
         };
-
-        if (payload.userName) {
-            const normalized = payload.userName.trim().toLowerCase();
-            if (normalized && normalized !== user.userName.toLowerCase()) {
-                const taken = await this.databaseService.user.findUnique({
-                    where: { userName: normalized },
-                });
-                if (taken && taken.id !== user.id) {
-                    throw new HttpException(
-                        'user.error.userNameExists',
-                        HttpStatus.CONFLICT
-                    );
-                }
-                data.userName = normalized;
-            }
-        }
 
         await this.databaseService.user.update({
             where: { id: user.id },

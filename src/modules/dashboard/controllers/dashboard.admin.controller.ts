@@ -1,5 +1,11 @@
-import { Controller, Get, HttpStatus, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, HttpStatus, Query, Res } from '@nestjs/common';
+import {
+    ApiBearerAuth,
+    ApiOperation,
+    ApiProduces,
+    ApiTags,
+} from '@nestjs/swagger';
+import { Response } from 'express';
 
 import { REVENUE_VIEW_ROLES } from 'src/common/request/constants/roles.constant';
 import { AllowedRoles } from 'src/common/request/decorators/request.role.decorator';
@@ -21,6 +27,7 @@ import { DashboardTodayStatsResponseDto } from '../dtos/response/today-stats.res
 import { DashboardTopCategoriesResponseDto } from '../dtos/response/top-categories.response.dto';
 import { PeriodKey } from '../utils/period.util';
 import { DashboardService } from '../services/dashboard.service';
+import { DashboardReportService } from '../services/dashboard-report.service';
 
 @ApiTags('admin.dashboard')
 @Controller({
@@ -28,7 +35,28 @@ import { DashboardService } from '../services/dashboard.service';
     version: '1',
 })
 export class DashboardAdminController {
-    constructor(private readonly dashboardService: DashboardService) {}
+    constructor(
+        private readonly dashboardService: DashboardService,
+        private readonly dashboardReportService: DashboardReportService
+    ) {}
+
+    @Get('report')
+    @AllowedRoles(REVENUE_VIEW_ROLES)
+    @ApiBearerAuth('accessToken')
+    @ApiOperation({ summary: 'Export current-month dashboard report as PDF' })
+    @ApiProduces('application/pdf')
+    async getReport(@Res() res: Response): Promise<void> {
+        const buffer = await this.dashboardReportService.generateMonthlyReport(
+            new Date()
+        );
+        const month = new Date().toISOString().slice(0, 7); // YYYY-MM
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="dashboard-report-${month}.pdf"`
+        );
+        res.end(buffer);
+    }
 
     @Get('summary')
     @AllowedRoles(REVENUE_VIEW_ROLES)

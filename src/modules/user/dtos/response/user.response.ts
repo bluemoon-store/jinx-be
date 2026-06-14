@@ -39,24 +39,11 @@ export class UserResponseDto implements Partial<User> {
     email: string;
 
     @ApiProperty({
-        example: faker.person.firstName(),
-        required: false,
-        nullable: true,
+        example: faker.person.fullName(),
     })
     @Expose()
     @IsString()
-    @IsOptional()
-    firstName: string | null;
-
-    @ApiProperty({
-        example: faker.person.lastName(),
-        required: false,
-        nullable: true,
-    })
-    @Expose()
-    @IsString()
-    @IsOptional()
-    lastName: string | null;
+    name: string;
 
     @ApiProperty({
         example: faker.image.avatar(),
@@ -67,13 +54,6 @@ export class UserResponseDto implements Partial<User> {
     @IsString()
     @IsOptional()
     avatar: string | null;
-
-    @ApiProperty({
-        example: faker.internet.username(),
-    })
-    @Expose()
-    @IsString()
-    userName: string;
 
     @ApiProperty({
         example: faker.phone.number(),

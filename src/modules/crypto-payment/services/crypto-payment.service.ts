@@ -488,6 +488,7 @@ export class CryptoPaymentService implements ICryptoPaymentService {
                 const updatedPayment =
                     await this.databaseService.cryptoPayment.findUnique({
                         where: { id: paymentId },
+                        include: { order: true },
                     });
                 if (updatedPayment) {
                     return this.mapToStatusResponseDto(updatedPayment, 0, true);
@@ -790,6 +791,7 @@ export class CryptoPaymentService implements ICryptoPaymentService {
         return {
             paymentId: payment.id,
             status: payment.status,
+            orderStatus: payment.order?.status,
             paymentAddress: payment.paymentAddress,
             amount: payment.amount.toString(),
             txHash: payment.txHash || undefined,

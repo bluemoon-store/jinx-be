@@ -351,6 +351,14 @@ export class WalletService implements IWalletService {
                 resourceLabel: `user:${userId}`,
             });
 
+            // Notify the customer of the credit (covers admin "Add balance" and,
+            // via processConfirmedTopUp, user crypto top-ups). Best-effort.
+            await this.enqueueTopUpSuccessfulEmail(
+                userId,
+                data.amount,
+                new Date()
+            );
+
             return updatedWallet as WalletResponseDto;
         } catch (error) {
             if (error instanceof HttpException) {
@@ -502,6 +510,16 @@ export class WalletService implements IWalletService {
                 after: { balance: newBalance },
                 resourceLabel: `user:${userId}`,
             });
+
+            // Only a positive adjustment is a credit worth a "top-up" email;
+            // negative corrections stay silent. Best-effort.
+            if (data.amount > 0) {
+                await this.enqueueTopUpSuccessfulEmail(
+                    userId,
+                    data.amount,
+                    new Date()
+                );
+            }
 
             return updatedWallet as WalletResponseDto;
         } catch (error) {
@@ -790,56 +808,67 @@ export class WalletService implements IWalletService {
                 referenceId: topUp.id,
             });
 
-            const creditedAt = new Date();
+            // addBalance() above already enqueued the top-up email; only mark the
+            // top-up as credited here (idempotency guard for re-processing).
             await this.databaseService.walletTopUp.update({
                 where: { id: topUpId },
                 data: {
-                    creditedAt,
+                    creditedAt: new Date(),
                 },
             });
-
-            await this.enqueueTopUpSuccessfulEmail(
-                topUp.wallet.userId,
-                amountUsd,
-                creditedAt
-            );
         } catch (error) {
             this.logger.error({ error, topUpId }, 'Failed to credit top-up');
             throw error;
         }
     }
 
+    /**
+     * Enqueues the "wallet top-up successful" email for any credit (user crypto
+     * top-up, admin add-balance, positive admin adjustment). Best-effort: the
+     * balance is already committed by the caller, so a queue hiccup here must
+     * never throw back and roll back / 500 the credit — it is only logged.
+     */
     private async enqueueTopUpSuccessfulEmail(
         userId: string,
         amountUsd: number,
         creditedAt: Date
     ): Promise<void> {
-        const user = await this.databaseService.user.findUnique({
-            where: { id: userId },
-            include: { wallet: true },
-        });
-        if (!user || !user.wallet) return;
+        try {
+            const user = await this.databaseService.user.findUnique({
+                where: { id: userId },
+                include: { wallet: true },
+            });
+            if (!user || !user.wallet) return;
 
-        const formatUsd = (n: number) =>
-            `$${n.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            })}`;
-        const balance = parseFloat(user.wallet.balance.toString());
-        const frontendUrl =
-            this.configService.get<string>('app.frontendUrl') ??
-            'http://localhost:3000';
-        const dashboardLink = `${frontendUrl.replace(/\/$/, '')}/wallet`;
+            const formatUsd = (n: number) =>
+                `$${n.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                })}`;
+            const balance = parseFloat(user.wallet.balance.toString());
+            const frontendUrl =
+                this.configService.get<string>('app.frontendUrl') ??
+                'http://localhost:3000';
+            const dashboardLink = `${frontendUrl.replace(/\/$/, '')}/wallet`;
 
-        this.emailQueue.add(EMAIL_TEMPLATES.WALLET_TOP_UP_SUCCESSFUL, {
-            data: {
-                amount: formatUsd(amountUsd),
-                wallet_balance: formatUsd(balance),
-                date: creditedAt.toISOString().slice(0, 10),
-                dashboard_link: dashboardLink,
-            },
-            toEmails: [user.email],
-        } as ISendEmailBasePayload<IWalletTopUpSuccessfulPayload>);
+            await this.emailQueue.add(
+                EMAIL_TEMPLATES.WALLET_TOP_UP_SUCCESSFUL,
+                {
+                    data: {
+                        amount: formatUsd(amountUsd),
+                        wallet_balance: formatUsd(balance),
+                        date: creditedAt.toISOString().slice(0, 10),
+                        dashboard_link: dashboardLink,
+                    },
+                    toEmails: [user.email],
+                } as ISendEmailBasePayload<IWalletTopUpSuccessfulPayload>
+            );
+        } catch (error) {
+            this.logger.error(
+                { error, userId, amountUsd },
+                'Failed to enqueue wallet top-up email'
+            );
+        }
     }
 
     async expireWalletTopUp(topUpId: string): Promise<void> {

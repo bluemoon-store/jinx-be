@@ -21,37 +21,17 @@ import {
 } from './dtos/response/ticket.response';
 
 type MessageWithRelations = TicketMessage & {
-    user?: Pick<
-        User,
-        | 'id'
-        | 'userName'
-        | 'firstName'
-        | 'lastName'
-        | 'avatar'
-        | 'role'
-        | 'email'
-    >;
+    user?: Pick<User, 'id' | 'name' | 'avatar' | 'role' | 'email'>;
     attachments?: TicketAttachment[];
 };
 
 export function mapUserSnapshot(
-    user: Pick<
-        User,
-        | 'id'
-        | 'email'
-        | 'userName'
-        | 'firstName'
-        | 'lastName'
-        | 'avatar'
-        | 'role'
-    >
+    user: Pick<User, 'id' | 'email' | 'name' | 'avatar' | 'role'>
 ): TicketUserSnapshotDto {
     return {
         id: user.id,
         email: user.email,
-        userName: user.userName,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        name: user.name,
         avatar: user.avatar,
         role: user.role,
     };
@@ -105,9 +85,7 @@ export function mapMessage(m: MessageWithRelations): TicketMessageResponseDto {
     const userSnap: TicketMessageUserSnapshotDto | undefined = m.user
         ? {
               id: m.user.id,
-              userName: m.user.userName,
-              firstName: m.user.firstName,
-              lastName: m.user.lastName,
+              name: m.user.name,
               avatar: m.user.avatar,
               role: m.user.role,
           }
@@ -127,26 +105,8 @@ export function mapMessage(m: MessageWithRelations): TicketMessageResponseDto {
 }
 
 export type TicketListRow = SupportTicket & {
-    user?: Pick<
-        User,
-        | 'id'
-        | 'email'
-        | 'userName'
-        | 'firstName'
-        | 'lastName'
-        | 'avatar'
-        | 'role'
-    >;
-    assignedTo?: Pick<
-        User,
-        | 'id'
-        | 'email'
-        | 'userName'
-        | 'firstName'
-        | 'lastName'
-        | 'avatar'
-        | 'role'
-    > | null;
+    user?: Pick<User, 'id' | 'email' | 'name' | 'avatar' | 'role'>;
+    assignedTo?: Pick<User, 'id' | 'email' | 'name' | 'avatar' | 'role'> | null;
     order?:
         | (Pick<Order, 'id' | 'orderNumber' | 'status'> & {
               items?: OrderItemTimestamps[];
@@ -197,25 +157,10 @@ export function mapTicketListItem(
 
 export function mapTicketDetail(
     row: SupportTicket & {
-        user: Pick<
-            User,
-            | 'id'
-            | 'email'
-            | 'userName'
-            | 'firstName'
-            | 'lastName'
-            | 'avatar'
-            | 'role'
-        >;
+        user: Pick<User, 'id' | 'email' | 'name' | 'avatar' | 'role'>;
         assignedTo?: Pick<
             User,
-            | 'id'
-            | 'email'
-            | 'userName'
-            | 'firstName'
-            | 'lastName'
-            | 'avatar'
-            | 'role'
+            'id' | 'email' | 'name' | 'avatar' | 'role'
         > | null;
         order?:
             | (Pick<Order, 'id' | 'orderNumber' | 'status'> & {

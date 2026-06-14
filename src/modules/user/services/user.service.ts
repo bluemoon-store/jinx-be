@@ -9,9 +9,11 @@ import {
 } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { Queue } from 'bull';
+import { Response } from 'express';
 
 import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { DatabaseService } from 'src/common/database/services/database.service';
+import { csvLine } from 'src/common/helper/utils/csv.util';
 import { EMAIL_TEMPLATES } from 'src/common/email/enums/email-template.enum';
 import {
     IAccountBannedPayload,
@@ -29,6 +31,11 @@ import { UserBanDto } from '../dtos/request/user.ban.request';
 import { UserFlagDto } from '../dtos/request/user.flag.request';
 import { UserAdminCreateDto } from '../dtos/request/user.admin.create.request';
 import { UserListQueryDto } from '../dtos/request/user.list.query.request';
+import {
+    UserExportFormat,
+    UserExportQueryDto,
+    UserExportScope,
+} from '../dtos/request/user.export.query.request';
 import {
     UserGetProfileResponseDto,
     UserUpdateProfileResponseDto,
@@ -321,9 +328,7 @@ export class UserService implements IUserService {
             id: user.id,
             userNumber: user.userNumber,
             email: user.email,
-            userName: user.userName,
-            firstName: user.firstName,
-            lastName: user.lastName,
+            name: user.name,
             avatar: user.avatar,
             role: user.role,
             isVerified: user.isVerified,
@@ -340,35 +345,48 @@ export class UserService implements IUserService {
         };
     }
 
+    /**
+     * Build the shared customer-list where clause: always restricted to the
+     * USER (customer) bucket and non-deleted rows, plus optional search and the
+     * banned/verified/flagged filters. Used by both listUsers and the export.
+     */
+    private buildUserListWhere(query: {
+        search?: string;
+        isBanned?: boolean;
+        isVerified?: boolean;
+        isFlagged?: boolean;
+    }): Prisma.UserWhereInput {
+        const andFilters: Prisma.UserWhereInput[] = [];
+
+        const searchFilter = this.helperPaginationService.buildSearchCondition(
+            query.search?.trim() ?? '',
+            ['email', 'name']
+        );
+        if (searchFilter) {
+            andFilters.push(searchFilter);
+        }
+        if (query.isBanned !== undefined) {
+            andFilters.push({ isBanned: query.isBanned });
+        }
+        if (query.isVerified !== undefined) {
+            andFilters.push({ isVerified: query.isVerified });
+        }
+        if (query.isFlagged !== undefined) {
+            andFilters.push({ isFlagged: query.isFlagged });
+        }
+
+        return {
+            role: Role.USER,
+            deletedAt: null,
+            ...(andFilters.length > 0 ? { AND: andFilters } : {}),
+        };
+    }
+
     async listUsers(
         query: UserListQueryDto
     ): Promise<ApiPaginatedDataDto<UserAdminListItemResponseDto>> {
         try {
-            const andFilters: Prisma.UserWhereInput[] = [];
-
-            const searchFilter =
-                this.helperPaginationService.buildSearchCondition(
-                    query.search?.trim() ?? '',
-                    ['email', 'firstName', 'lastName', 'userName']
-                );
-            if (searchFilter) {
-                andFilters.push(searchFilter);
-            }
-            if (query.isBanned !== undefined) {
-                andFilters.push({ isBanned: query.isBanned });
-            }
-            if (query.isVerified !== undefined) {
-                andFilters.push({ isVerified: query.isVerified });
-            }
-            if (query.isFlagged !== undefined) {
-                andFilters.push({ isFlagged: query.isFlagged });
-            }
-
-            const where: Prisma.UserWhereInput = {
-                role: Role.USER,
-                deletedAt: null,
-                ...(andFilters.length > 0 ? { AND: andFilters } : {}),
-            };
+            const where = this.buildUserListWhere(query);
 
             const result =
                 await this.helperPaginationService.paginate<UserWithWallet>(
@@ -399,6 +417,149 @@ export class UserService implements IUserService {
         }
     }
 
+    /**
+     * Stream the filtered customer list to the response as a downloadable file.
+     * Mirrors the activity-log CSV export: keyset-paginated batches under a hard
+     * row cap so a large customer base never buffers fully in memory. Supports
+     * emails-only vs full scope and csv vs txt format.
+     */
+    async streamExportUsers(
+        query: UserExportQueryDto,
+        res: Response
+    ): Promise<void> {
+        const EXPORT_ROW_CAP = 50_000;
+        const BATCH_SIZE = 1000;
+
+        const scope = query.scope ?? UserExportScope.FULL;
+        const format = query.format ?? UserExportFormat.CSV;
+        const where = this.buildUserListWhere(query);
+        const includeWallet = scope === UserExportScope.FULL;
+
+        const ext = format === UserExportFormat.TXT ? 'txt' : 'csv';
+        const date = new Date().toISOString().slice(0, 10);
+        res.setHeader(
+            'Content-Type',
+            format === UserExportFormat.TXT
+                ? 'text/plain; charset=utf-8'
+                : 'text/csv; charset=utf-8'
+        );
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="users-${scope}-${date}.${ext}"`
+        );
+
+        const fullColumns = [
+            'userNumber',
+            'name',
+            'email',
+            'phone',
+            'isVerified',
+            'role',
+            'isBanned',
+            'isFlagged',
+            'walletBalance',
+            'createdAt',
+        ];
+
+        // Header row (CSV only; emails-txt and full-txt are headerless).
+        if (format === UserExportFormat.CSV) {
+            res.write(
+                scope === UserExportScope.EMAILS
+                    ? csvLine(['email'])
+                    : csvLine(fullColumns)
+            );
+        }
+
+        let cursor: { createdAt: Date; id: string } | undefined;
+        let written = 0;
+
+        while (written < EXPORT_ROW_CAP) {
+            const take = Math.min(BATCH_SIZE, EXPORT_ROW_CAP - written);
+            const cursorWhere: Prisma.UserWhereInput = cursor
+                ? {
+                      OR: [
+                          { createdAt: { lt: cursor.createdAt } },
+                          {
+                              AND: [
+                                  { createdAt: cursor.createdAt },
+                                  { id: { lt: cursor.id } },
+                              ],
+                          },
+                      ],
+                  }
+                : {};
+
+            const batch = await this.databaseService.user.findMany({
+                where: { AND: [where, cursorWhere] },
+                orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+                take,
+                include: { wallet: includeWallet },
+            });
+
+            if (batch.length === 0) {
+                break;
+            }
+
+            for (const user of batch) {
+                if (scope === UserExportScope.EMAILS) {
+                    res.write(
+                        format === UserExportFormat.CSV
+                            ? csvLine([user.email])
+                            : `${user.email}\n`
+                    );
+                } else if (format === UserExportFormat.CSV) {
+                    res.write(
+                        csvLine([
+                            user.userNumber,
+                            user.name,
+                            user.email,
+                            user.phone,
+                            user.isVerified,
+                            user.role,
+                            user.isBanned,
+                            user.isFlagged,
+                            (
+                                user as UserWithWallet
+                            ).wallet?.balance?.toString() ?? '',
+                            user.createdAt.toISOString(),
+                        ])
+                    );
+                } else {
+                    // full + txt: a labelled block per user.
+                    const wallet =
+                        (user as UserWithWallet).wallet?.balance?.toString() ??
+                        '0';
+                    res.write(
+                        [
+                            `User: ${user.name} (${user.userNumber ?? '—'})`,
+                            `Email: ${user.email}`,
+                            `Phone: ${user.phone ?? '—'}`,
+                            `Verified: ${user.isVerified ? 'yes' : 'no'}`,
+                            `Role: ${user.role}`,
+                            `Banned: ${user.isBanned ? 'yes' : 'no'}`,
+                            `Flagged: ${user.isFlagged ? 'yes' : 'no'}`,
+                            `Wallet balance: ${wallet}`,
+                            `Created: ${user.createdAt.toISOString()}`,
+                            '',
+                        ].join('\n')
+                    );
+                }
+                written++;
+                if (written >= EXPORT_ROW_CAP) {
+                    break;
+                }
+            }
+
+            const last = batch[batch.length - 1];
+            cursor = { createdAt: last.createdAt, id: last.id };
+            if (batch.length < take) {
+                break;
+            }
+        }
+
+        res.end();
+    }
+
     async getUserById(id: string): Promise<UserAdminListItemResponseDto> {
         const user = await this.databaseService.user.findFirst({
             where: { id, role: Role.USER, deletedAt: null },
@@ -419,40 +580,24 @@ export class UserService implements IUserService {
         dto: UserAdminCreateDto
     ): Promise<UserAdminCreateResponseDto> {
         const email = dto.email.trim().toLowerCase();
-        const userName = dto.userName.trim().toLowerCase();
 
         try {
             // Admin-created accounts are CUSTOMER (USER) accounts, so an email
             // collision only matters within the customer bucket; a team account
-            // with the same email is allowed. userName stays globally unique.
+            // with the same email is allowed.
             const existing = await this.databaseService.user.findFirst({
                 where: {
                     deletedAt: null,
-                    OR: [{ email, role: Role.USER }, { userName }],
+                    email,
+                    role: Role.USER,
                 },
             });
 
             if (existing) {
-                const emailTaken = existing.email === email;
-                const userNameTaken = existing.userName === userName;
-                if (emailTaken && userNameTaken) {
-                    throw new HttpException(
-                        'user.error.alreadyExists',
-                        HttpStatus.CONFLICT
-                    );
-                }
-                if (emailTaken) {
-                    throw new HttpException(
-                        'user.error.emailAlreadyTaken',
-                        HttpStatus.CONFLICT
-                    );
-                }
-                if (userNameTaken) {
-                    throw new HttpException(
-                        'user.error.userNameExists',
-                        HttpStatus.CONFLICT
-                    );
-                }
+                throw new HttpException(
+                    'user.error.emailAlreadyTaken',
+                    HttpStatus.CONFLICT
+                );
             }
 
             const generatedPassword = this.generateStrongRandomPassword();
@@ -468,10 +613,8 @@ export class UserService implements IUserService {
             const created = await this.databaseService.user.create({
                 data: {
                     email,
-                    userName,
+                    name: dto.name.trim(),
                     password: hashed,
-                    firstName: dto.firstName ?? null,
-                    lastName: dto.lastName ?? null,
                     phone: dto.phone ?? null,
                     role: Role.USER,
                     isVerified: dto.markVerified ?? false,

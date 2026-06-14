@@ -237,6 +237,7 @@ describe('AuthService', () => {
                 service.signup({
                     email: 'existing@example.com',
                     password: 'password123',
+                    name: 'Existing User',
                 })
             ).rejects.toThrow(HttpException);
         });
@@ -245,7 +246,7 @@ describe('AuthService', () => {
             const newUser = {
                 id: '123',
                 email: 'new@example.com',
-                userName: 'newuser',
+                name: 'John Doe',
                 role: Role.USER,
             };
             const tokens = {
@@ -265,8 +266,7 @@ describe('AuthService', () => {
             const result = await service.signup({
                 email: 'new@example.com',
                 password: 'password123',
-                firstName: 'John',
-                lastName: 'Doe',
+                name: 'John Doe',
             });
 
             expect(result).toEqual({ ...tokens, user: newUser });
@@ -310,7 +310,7 @@ describe('AuthService', () => {
             mockPrismaService.user.findUnique.mockResolvedValue({
                 id: 'u1',
                 email: 'a@example.com',
-                userName: 'alice',
+                name: 'alice',
                 deletedAt: null,
             });
             mockPrismaService.user.update.mockResolvedValue({});
@@ -350,7 +350,7 @@ describe('AuthService', () => {
             mockPrismaService.user.findUnique.mockResolvedValue({
                 id: 'u1',
                 email: 'a@example.com',
-                userName: 'alice',
+                name: 'alice',
                 deletedAt: null,
             });
             mockPrismaService.user.update.mockResolvedValue({});

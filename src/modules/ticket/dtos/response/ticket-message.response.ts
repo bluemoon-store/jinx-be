@@ -18,22 +18,10 @@ export class TicketMessageUserSnapshotDto {
     @IsUUID()
     id: string;
 
-    @ApiProperty({ example: faker.internet.username() })
+    @ApiProperty({ example: faker.person.fullName() })
     @Expose()
     @IsString()
-    userName: string;
-
-    @ApiPropertyOptional({ nullable: true })
-    @Expose()
-    @IsOptional()
-    @IsString()
-    firstName: string | null;
-
-    @ApiPropertyOptional({ nullable: true })
-    @Expose()
-    @IsOptional()
-    @IsString()
-    lastName: string | null;
+    name: string;
 
     @ApiPropertyOptional({ nullable: true })
     @Expose()

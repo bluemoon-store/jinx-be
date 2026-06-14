@@ -15,15 +15,16 @@ model User {
   // Compact, branded display identifier, e.g. JINX-USR-738291045. UUID `id`
   // stays the source of truth for URLs/API/foreign keys; this is surfaced in UI.
   userNumber  String?   @unique @map("user_number")
-  userName    String    @unique
+  // Single human-readable display name, set by the user (customer signup) or by
+  // the inviter (team/admin). Login is by email everywhere; there is no separate
+  // login handle.
+  name        String
   // Not globally unique: an email may have one CUSTOMER (role USER) account and
   // one TEAM (non-USER) account. Live-per-bucket uniqueness is enforced by two
   // partial unique indexes in the migration (Prisma can't express partial
   // indexes), so `email` intentionally has no @unique here.
   email       String
   password    String
-  firstName   String?   @map("first_name")
-  lastName    String?   @map("last_name")
   isVerified  Boolean   @default(false) @map("is_verified")
   phone       String?
   role        Role      @default(USER)

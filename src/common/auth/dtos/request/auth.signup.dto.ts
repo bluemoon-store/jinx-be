@@ -1,25 +1,19 @@
 import { faker } from '@faker-js/faker';
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsString, Length } from 'class-validator';
+import { IsNotEmpty, IsString, Length } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 import { UserLoginDto } from './auth.login.dto';
 
 export class UserCreateDto extends UserLoginDto {
     @ApiProperty({
-        example: faker.person.firstName(),
-        required: false,
+        example: faker.person.fullName(),
     })
     @IsString()
-    @IsOptional()
-    @Length(1, 50)
-    public firstName?: string;
-
-    @ApiProperty({
-        example: faker.person.lastName(),
-        required: false,
-    })
-    @IsString()
-    @IsOptional()
-    @Length(1, 50)
-    public lastName?: string;
+    @IsNotEmpty()
+    @Length(1, 100)
+    @Transform(({ value }) =>
+        typeof value === 'string' ? value.trim() : value
+    )
+    public name: string;
 }

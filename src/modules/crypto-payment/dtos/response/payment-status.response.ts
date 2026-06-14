@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { PaymentStatus } from '@prisma/client';
+import { OrderStatus, PaymentStatus } from '@prisma/client';
 import { Expose } from 'class-transformer';
 
 export class PaymentStatusResponseDto {
@@ -13,6 +13,13 @@ export class PaymentStatusResponseDto {
     })
     @Expose()
     status: PaymentStatus;
+
+    @ApiProperty({
+        description: 'Parent order status (e.g. COMPLETED when admin approves)',
+        enum: OrderStatus,
+    })
+    @Expose()
+    orderStatus: OrderStatus;
 
     @ApiProperty({ description: 'Payment address' })
     @Expose()

@@ -25,9 +25,7 @@ const ticketListContextInclude = {
         select: {
             id: true,
             email: true,
-            userName: true,
-            firstName: true,
-            lastName: true,
+            name: true,
             avatar: true,
             role: true,
         },
@@ -36,9 +34,7 @@ const ticketListContextInclude = {
         select: {
             id: true,
             email: true,
-            userName: true,
-            firstName: true,
-            lastName: true,
+            name: true,
             avatar: true,
             role: true,
         },
@@ -115,9 +111,7 @@ export class TicketMessageService implements ITicketMessageService {
                     user: {
                         select: {
                             id: true,
-                            userName: true,
-                            firstName: true,
-                            lastName: true,
+                            name: true,
                             avatar: true,
                             role: true,
                             email: true,
@@ -215,9 +209,7 @@ export class TicketMessageService implements ITicketMessageService {
                     user: {
                         select: {
                             id: true,
-                            userName: true,
-                            firstName: true,
-                            lastName: true,
+                            name: true,
                             avatar: true,
                             role: true,
                             email: true,
@@ -285,9 +277,7 @@ export class TicketMessageService implements ITicketMessageService {
                 user: {
                     select: {
                         id: true,
-                        userName: true,
-                        firstName: true,
-                        lastName: true,
+                        name: true,
                         avatar: true,
                         role: true,
                         email: true,
@@ -323,9 +313,7 @@ export class TicketMessageService implements ITicketMessageService {
                     user: {
                         select: {
                             id: true,
-                            userName: true,
-                            firstName: true,
-                            lastName: true,
+                            name: true,
                             avatar: true,
                             role: true,
                             email: true,
@@ -376,9 +364,7 @@ export class TicketMessageService implements ITicketMessageService {
                 user: {
                     select: {
                         id: true,
-                        userName: true,
-                        firstName: true,
-                        lastName: true,
+                        name: true,
                         avatar: true,
                         role: true,
                         email: true,

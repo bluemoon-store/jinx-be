@@ -301,6 +301,27 @@ export class OrderResponseDto {
     cancelledAt: Date | null;
 
     @ApiPropertyOptional({
+        example: faker.date.recent().toISOString(),
+        nullable: true,
+        description:
+            'Set when an admin manually approves (COMPLETED) or declines (CANCELLED) the order.',
+    })
+    @Expose()
+    @IsOptional()
+    @IsDate()
+    manuallyReviewedAt: Date | null;
+
+    @ApiPropertyOptional({
+        example: faker.string.uuid(),
+        nullable: true,
+        description: 'Id of the admin who manually reviewed the order.',
+    })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    manuallyReviewedById: string | null;
+
+    @ApiPropertyOptional({
         example: faker.date.past().toISOString(),
         nullable: true,
     })
@@ -365,27 +386,11 @@ export class OrderUserSnapshotDto {
     email: string;
 
     @ApiProperty({
-        example: faker.internet.username(),
+        example: faker.person.fullName(),
     })
     @Expose()
     @IsString()
-    userName: string;
-
-    @ApiPropertyOptional({
-        nullable: true,
-    })
-    @Expose()
-    @IsOptional()
-    @IsString()
-    firstName: string | null;
-
-    @ApiPropertyOptional({
-        nullable: true,
-    })
-    @Expose()
-    @IsOptional()
-    @IsString()
-    lastName: string | null;
+    name: string;
 }
 
 export class OrderDetailResponseDto extends OrderResponseDto {

@@ -40,11 +40,9 @@ export class UsersSeedService {
 
         const user = await this.databaseService.user.create({
             data: {
-                userName: 'seed',
+                name: 'Seed User',
                 email: SEED_EMAIL,
                 password,
-                firstName: 'Seed',
-                lastName: 'User',
                 phone: '+10000000000',
                 avatar: 'seed/avatars/demo-user.png',
                 dateOfBirth: new Date('1990-01-15'),
@@ -99,15 +97,12 @@ export class UsersSeedService {
         const password = SEED_PASSWORD;
 
         const hashedPassword = await argon2.hash(password);
-        const userName = 'superadmin';
 
         const superAdmin = await this.databaseService.user.create({
             data: {
-                userName,
+                name: 'Super Admin',
                 email: email.toLowerCase().trim(),
                 password: hashedPassword,
-                firstName: 'Super',
-                lastName: 'Admin',
                 role: Role.SUPER_ADMIN,
                 isVerified: true,
                 userNumber: await generateUniqueUserNumber(

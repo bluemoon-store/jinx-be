@@ -79,13 +79,13 @@ describe('UserService', () => {
             mockPrismaService.user.findUnique.mockResolvedValue(null);
 
             await expect(
-                service.updateUser('non-existent-id', { firstName: 'John' })
+                service.updateUser('non-existent-id', { name: 'John' })
             ).rejects.toThrow(HttpException);
         });
 
         it('should update and return the user if user exists', async () => {
-            const mockUser = { id: '123', firstName: 'John', lastName: 'Doe' };
-            const updateDto: UserUpdateDto = { firstName: 'Jane' };
+            const mockUser = { id: '123', name: 'John Doe' };
+            const updateDto: UserUpdateDto = { name: 'Jane' };
 
             mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
             mockPrismaService.user.update.mockResolvedValue({
@@ -111,8 +111,7 @@ describe('UserService', () => {
         it('should soft delete the user and return success message', async () => {
             const mockUser = {
                 id: '123',
-                firstName: 'John',
-                lastName: 'Doe',
+                name: 'John Doe',
                 password: 'hashed',
             };
 
@@ -157,7 +156,7 @@ describe('UserService', () => {
         });
 
         it('should return the user profile if user exists', async () => {
-            const mockUser = { id: '123', firstName: 'John', lastName: 'Doe' };
+            const mockUser = { id: '123', name: 'John Doe' };
 
             mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
 
@@ -181,35 +180,17 @@ describe('UserService', () => {
             mockPrismaService.user.findFirst.mockResolvedValue({
                 id: 'u1',
                 email: 'taken@example.com',
-                userName: 'other',
+                name: 'Other User',
             });
 
             await expect(
                 service.createByAdmin({
                     email: 'taken@example.com',
-                    userName: 'newuser',
+                    name: 'New User',
                     markVerified: false,
                 })
             ).rejects.toMatchObject({
                 response: 'user.error.emailAlreadyTaken',
-            });
-        });
-
-        it('should reject when username is taken', async () => {
-            mockPrismaService.user.findFirst.mockResolvedValue({
-                id: 'u1',
-                email: 'other@example.com',
-                userName: 'taken_name',
-            });
-
-            await expect(
-                service.createByAdmin({
-                    email: 'fresh@example.com',
-                    userName: 'taken_name',
-                    markVerified: false,
-                })
-            ).rejects.toMatchObject({
-                response: 'user.error.userNameExists',
             });
         });
 
@@ -219,9 +200,7 @@ describe('UserService', () => {
                 .mockResolvedValueOnce({
                     id: 'new-id',
                     email: 'new@example.com',
-                    userName: 'newuser',
-                    firstName: null,
-                    lastName: null,
+                    name: 'New User',
                     avatar: null,
                     role: Role.USER,
                     isVerified: true,
@@ -240,12 +219,12 @@ describe('UserService', () => {
             mockPrismaService.user.create.mockResolvedValue({
                 id: 'new-id',
                 email: 'new@example.com',
-                userName: 'newuser',
+                name: 'New User',
             });
 
             const result = await service.createByAdmin({
                 email: 'new@example.com',
-                userName: 'newuser',
+                name: 'New User',
                 markVerified: true,
             });
 

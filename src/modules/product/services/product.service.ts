@@ -64,9 +64,7 @@ const listInclude = {
     creator: {
         select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            userName: true,
+            name: true,
             email: true,
             role: true,
         },
@@ -118,12 +116,7 @@ export class ProductService implements IProductService {
             });
         const creator = product.creator;
         const createdByName = creator
-            ? [creator.firstName, creator.lastName]
-                  .filter(Boolean)
-                  .join(' ')
-                  .trim() ||
-              creator.userName ||
-              creator.email
+            ? creator.name?.trim() || creator.email
             : null;
         const createdByRole = creator?.role ?? null;
         return {

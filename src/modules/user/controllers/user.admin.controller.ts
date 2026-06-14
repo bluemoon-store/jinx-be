@@ -8,9 +8,16 @@ import {
     Param,
     Post,
     Query,
+    Res,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+    ApiBearerAuth,
+    ApiOperation,
+    ApiProduces,
+    ApiTags,
+} from '@nestjs/swagger';
 import { ActivityLogCategory } from '@prisma/client';
+import { Response } from 'express';
 
 import {
     READ_ADMIN_ROLES,
@@ -30,6 +37,7 @@ import { ApiPaginatedDataDto } from 'src/common/response/dtos/response.paginated
 import { UserBanDto } from '../dtos/request/user.ban.request';
 import { UserFlagDto } from '../dtos/request/user.flag.request';
 import { UserListQueryDto } from '../dtos/request/user.list.query.request';
+import { UserExportQueryDto } from '../dtos/request/user.export.query.request';
 import { UserAdminCreateDto } from '../dtos/request/user.admin.create.request';
 import {
     UserAdminListItemResponseDto,
@@ -100,6 +108,28 @@ export class UserAdminController {
         @Body() payload: UserAdminCreateDto
     ): Promise<UserAdminCreateResponseDto> {
         return this.userService.createByAdmin(payload);
+    }
+
+    @Get('export')
+    @AuditLog({
+        action: 'user.export',
+        category: ActivityLogCategory.USER,
+        resourceType: 'User',
+    })
+    @AllowedRoles(READ_ADMIN_ROLES)
+    @ApiBearerAuth('accessToken')
+    @ApiOperation({ summary: 'Export users as CSV or TXT (admin)' })
+    @ApiProduces('text/csv', 'text/plain')
+    public async exportUsers(
+        @Query(
+            new QueryTransformPipe({
+                booleanFields: ['isBanned', 'isVerified', 'isFlagged'],
+            })
+        )
+        query: UserExportQueryDto,
+        @Res() res: Response
+    ): Promise<void> {
+        await this.userService.streamExportUsers(query, res);
     }
 
     @Get(':id')

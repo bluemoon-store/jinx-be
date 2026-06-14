@@ -32,7 +32,7 @@ export class VouchService implements IVouchService {
     }
 
     private readonly includeConfig = {
-        user: { select: { id: true, userName: true, avatar: true } },
+        user: { select: { id: true, name: true, avatar: true } },
         orderItem: {
             include: {
                 product: {
@@ -56,7 +56,7 @@ export class VouchService implements IVouchService {
     } as const;
 
     private readonly dropClaimIncludeConfig = {
-        user: { select: { id: true, userName: true, avatar: true } },
+        user: { select: { id: true, name: true, avatar: true } },
         dropClaim: {
             include: {
                 drop: {
@@ -108,7 +108,7 @@ export class VouchService implements IVouchService {
             createdAt: vouch.createdAt,
             user: {
                 id: vouch.user.id,
-                userName: vouch.user.userName,
+                name: vouch.user.name,
                 avatar: vouch.user.avatar,
             },
             product: {
@@ -129,7 +129,7 @@ export class VouchService implements IVouchService {
             createdAt: vouch.createdAt,
             user: {
                 id: vouch.user.id,
-                userName: vouch.user.userName,
+                name: vouch.user.name,
                 avatar: vouch.user.avatar,
             },
             product: {

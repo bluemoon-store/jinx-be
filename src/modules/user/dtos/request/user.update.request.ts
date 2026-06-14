@@ -21,26 +21,15 @@ export class UserUpdateDto {
     email?: string;
 
     @ApiProperty({
-        example: faker.person.firstName(),
+        example: faker.person.fullName(),
         required: false,
     })
     @IsString()
     @IsOptional()
-    @MinLength(2)
-    @MaxLength(50)
+    @MinLength(1)
+    @MaxLength(100)
     @Transform(({ value }) => value?.trim())
-    firstName?: string;
-
-    @ApiProperty({
-        example: faker.person.lastName(),
-        required: false,
-    })
-    @IsString()
-    @IsOptional()
-    @MinLength(2)
-    @MaxLength(50)
-    @Transform(({ value }) => value?.trim())
-    lastName?: string;
+    name?: string;
 
     @ApiProperty({
         example: 'user-avatars/1234567890abcdef.jpg',

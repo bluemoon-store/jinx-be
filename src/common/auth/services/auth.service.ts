@@ -1,6 +1,5 @@
 import { randomInt, randomUUID } from 'crypto';
 
-import { faker } from '@faker-js/faker';
 import { InjectQueue } from '@nestjs/bull';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -38,6 +37,7 @@ import { AdminVerifyOtpDto } from '../dtos/request/auth.admin-verify-otp.dto';
 import { ChangeEmailDto } from '../dtos/request/auth.change-email.dto';
 import { ChangePasswordDto } from '../dtos/request/auth.change-password.dto';
 import { ForgotPasswordDto } from '../dtos/request/auth.forgot-password.dto';
+import { GuestCheckoutDto } from '../dtos/request/auth.guest-checkout.dto';
 import { UserLoginDto } from '../dtos/request/auth.login.dto';
 import { ResetPasswordLinkDto } from '../dtos/request/auth.reset-password-link.dto';
 import { ResetPasswordDto } from '../dtos/request/auth.reset-password.dto';
@@ -392,7 +392,7 @@ export class AuthService implements IAuthService {
 
     public async signup(data: UserCreateDto): Promise<AuthResponseDto> {
         try {
-            const { email, firstName, lastName, password } = data;
+            const { email, name, password } = data;
 
             // Signup creates a CUSTOMER (USER) account. Only a live customer
             // account with this email blocks it; a team account may share it.
@@ -420,10 +420,8 @@ export class AuthService implements IAuthService {
                     data: {
                         email,
                         password: hashed,
-                        firstName: firstName?.trim(),
-                        lastName: lastName?.trim(),
+                        name: name.trim(),
                         role: Role.USER,
-                        userName: faker.internet.username(),
                         userNumber,
                     },
                 });
@@ -461,6 +459,83 @@ export class AuthService implements IAuthService {
         } catch (error) {
             throw error;
         }
+    }
+
+    /**
+     * Guest checkout: find-or-create an unverified CUSTOMER (USER) account for
+     * the given email and issue tokens, so the rest of the checkout (cart, order,
+     * payment, delivery) can run through the normal authenticated flow.
+     *
+     * If a live customer account already exists for the email we refuse and tell
+     * the caller to log in — we never mint a token for an account we didn't just
+     * create (no silent account takeover). The guest can later claim the account
+     * via forgot-password.
+     */
+    public async guestCheckout(
+        data: GuestCheckoutDto
+    ): Promise<AuthResponseDto> {
+        const { email } = data;
+
+        const existingUser = await this.databaseService.user.findFirst({
+            where: { email, role: Role.USER, deletedAt: null },
+        });
+
+        if (existingUser) {
+            // An account (real or a previous guest) owns this email. Require
+            // login rather than attaching the order to someone else's account.
+            throw new HttpException(
+                'auth.error.accountExistsLoginRequired',
+                HttpStatus.CONFLICT
+            );
+        }
+
+        // The guest never signs in with this password; it's a placeholder so the
+        // required column is satisfied. They claim the account via forgot-password.
+        const hashed =
+            await this.helperEncryptionService.createHash(randomUUID());
+
+        const userNumber = await generateUniqueUserNumber(this.databaseService);
+
+        // Derive a readable display name from the email local-part so admin/order
+        // views show something better than a blank.
+        const name = email.split('@')[0] || 'Guest';
+
+        let createdUser;
+        try {
+            createdUser = await this.databaseService.user.create({
+                data: {
+                    email,
+                    password: hashed,
+                    name,
+                    role: Role.USER,
+                    userNumber,
+                },
+            });
+        } catch (error) {
+            // DB backstop for a concurrent create race (partial customer index).
+            if (
+                error instanceof Prisma.PrismaClientKnownRequestError &&
+                error.code === 'P2002'
+            ) {
+                throw new HttpException(
+                    'auth.error.accountExistsLoginRequired',
+                    HttpStatus.CONFLICT
+                );
+            }
+            throw error;
+        }
+
+        await this.walletService.createWallet(createdUser.id);
+
+        const tokens = await this.helperEncryptionService.createJwtTokens({
+            role: createdUser.role,
+            userId: createdUser.id,
+        });
+
+        return {
+            ...tokens,
+            user: createdUser,
+        };
     }
 
     public async logout(): Promise<{ success: boolean; message: string }> {
@@ -793,7 +868,7 @@ export class AuthService implements IAuthService {
         this.emailQueue.add(EMAIL_TEMPLATES.RESET_PASSWORD_LINK, {
             data: {
                 reset_link: resetUrl,
-                userName: user.userName,
+                userName: user.name,
             },
             toEmails: [user.email],
         } as ISendEmailBasePayload<IResetPasswordLinkPayload>);

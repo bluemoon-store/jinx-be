@@ -36,6 +36,7 @@ import { AcceptInvitationRequestDto } from '../dtos/request/accept-invitation.re
 import { ChangeEmailDto } from '../dtos/request/auth.change-email.dto';
 import { ChangePasswordDto } from '../dtos/request/auth.change-password.dto';
 import { ForgotPasswordDto } from '../dtos/request/auth.forgot-password.dto';
+import { GuestCheckoutDto } from '../dtos/request/auth.guest-checkout.dto';
 import { UserLoginDto } from '../dtos/request/auth.login.dto';
 import { ResetPasswordLinkDto } from '../dtos/request/auth.reset-password-link.dto';
 import { ResetPasswordDto } from '../dtos/request/auth.reset-password.dto';
@@ -165,6 +166,25 @@ export class AuthPublicController {
     })
     public signup(@Body() payload: UserCreateDto): Promise<AuthResponseDto> {
         return this.authService.signup(payload);
+    }
+
+    @Post('guest-checkout')
+    @PublicRoute()
+    @UseGuards(TurnstileGuard)
+    @ApiOperation({
+        summary: 'Guest checkout',
+        description:
+            'Find-or-create an unverified customer account for the email and return tokens, so checkout can proceed through the normal authenticated flow. Returns 409 when a live account already exists for the email (caller should prompt login).',
+    })
+    @DocResponse({
+        serialization: AuthResponseDto,
+        httpStatus: HttpStatus.CREATED,
+        messageKey: 'auth.success.guestCheckout',
+    })
+    public guestCheckout(
+        @Body() payload: GuestCheckoutDto
+    ): Promise<AuthResponseDto> {
+        return this.authService.guestCheckout(payload);
     }
 
     @Post('accept-invitation')

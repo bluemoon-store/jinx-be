@@ -9,7 +9,7 @@ export class VouchUserDto {
 
     @ApiProperty()
     @Expose()
-    userName: string;
+    name: string;
 
     @ApiPropertyOptional({ nullable: true })
     @Expose()

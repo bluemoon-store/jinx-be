@@ -5,13 +5,19 @@ import { RequestModule } from 'src/common/request/request.module';
 
 import { DashboardAdminController } from './controllers/dashboard.admin.controller';
 import { CustomerMetricsService } from './services/customer-metrics.service';
+import { DashboardReportService } from './services/dashboard-report.service';
 import { DashboardService } from './services/dashboard.service';
 import { SalesMetricsService } from './services/sales-metrics.service';
 
 @Module({
     imports: [DatabaseModule, RequestModule],
     controllers: [DashboardAdminController],
-    providers: [DashboardService, SalesMetricsService, CustomerMetricsService],
+    providers: [
+        DashboardService,
+        SalesMetricsService,
+        CustomerMetricsService,
+        DashboardReportService,
+    ],
     exports: [DashboardService],
 })
 export class DashboardModule {}

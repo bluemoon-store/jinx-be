@@ -7,6 +7,7 @@ import { Cache } from 'cache-manager';
 import { PinoLogger } from 'nestjs-pino';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { Role } from '@prisma/client';
 
 import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { DatabaseService } from 'src/common/database/services/database.service';
@@ -534,7 +535,7 @@ export class SettingsService {
         // loading every row into memory at once.
         while (true) {
             const batch = await this.databaseService.user.findMany({
-                where: { deletedAt: null, isBanned: false },
+                where: { deletedAt: null, isBanned: false, role: Role.USER },
                 select: { id: true, email: true },
                 orderBy: { id: 'asc' },
                 take: batchSize,
