@@ -21,6 +21,17 @@ export class UserResponseDto implements Partial<User> {
     id: string;
 
     @ApiProperty({
+        example: 'JINX-USR-738291045',
+        required: false,
+        nullable: true,
+        description: 'Compact display id, e.g. JINX-USR-738291045',
+    })
+    @Expose()
+    @IsString()
+    @IsOptional()
+    userNumber: string | null;
+
+    @ApiProperty({
         example: faker.internet.email(),
     })
     @Expose()

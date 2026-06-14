@@ -12,6 +12,9 @@ datasource db {
 
 model User {
   id          String    @id @default(uuid())
+  // Compact, branded display identifier, e.g. JINX-USR-738291045. UUID `id`
+  // stays the source of truth for URLs/API/foreign keys; this is surfaced in UI.
+  userNumber  String?   @unique @map("user_number")
   userName    String    @unique
   // Not globally unique: an email may have one CUSTOMER (role USER) account and
   // one TEAM (non-USER) account. Live-per-bucket uniqueness is enforced by two
@@ -394,6 +397,8 @@ model Order {
   updatedAt      DateTime        @updatedAt @map("updated_at")
   completedAt    DateTime?       @map("completed_at")
   cancelledAt    DateTime?       @map("cancelled_at")
+  manuallyReviewedAt   DateTime? @map("manually_reviewed_at")
+  manuallyReviewedById String?   @map("manually_reviewed_by_id")
   deletedAt      DateTime?       @map("deleted_at")
 
   @@index([userId])

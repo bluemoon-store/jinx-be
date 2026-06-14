@@ -12,6 +12,7 @@ export const REFERENCE_PREFIX = {
     DROP: 'DRP',
     PRODUCT: 'PRD',
     TICKET: 'TKT',
+    USER: 'USR',
 } as const;
 
 export type ReferencePrefix =

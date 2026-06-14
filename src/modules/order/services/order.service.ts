@@ -693,6 +693,7 @@ export class OrderService implements IOrderService {
                     user: {
                         select: {
                             id: true,
+                            userNumber: true,
                             email: true,
                             userName: true,
                             firstName: true,
@@ -806,7 +807,8 @@ export class OrderService implements IOrderService {
      */
     async updateOrderStatus(
         orderId: string,
-        data: OrderStatusUpdateDto
+        data: OrderStatusUpdateDto,
+        adminUserId?: string
     ): Promise<OrderResponseDto> {
         try {
             const order = await this.databaseService.order.findFirst({
@@ -839,6 +841,17 @@ export class OrderService implements IOrderService {
             // Set cancelledAt if status is CANCELLED
             if (data.status === OrderStatus.CANCELLED && !order.cancelledAt) {
                 updateData.cancelledAt = new Date();
+            }
+
+            // Record the manual admin review (approve -> COMPLETED, decline ->
+            // CANCELLED). The crypto/fiat auto-confirm path does not go through
+            // this method, so these fields isolate human-admin decisions.
+            if (
+                data.status === OrderStatus.COMPLETED ||
+                data.status === OrderStatus.CANCELLED
+            ) {
+                updateData.manuallyReviewedAt = new Date();
+                updateData.manuallyReviewedById = adminUserId ?? null;
             }
 
             let updatedOrder;
@@ -1412,6 +1425,7 @@ export class OrderService implements IOrderService {
                             user: {
                                 select: {
                                     id: true,
+                                    userNumber: true,
                                     email: true,
                                     userName: true,
                                     firstName: true,

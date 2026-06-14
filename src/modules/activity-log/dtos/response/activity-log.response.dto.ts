@@ -16,6 +16,12 @@ export class ActivityLogResponseDto {
     @Expose()
     actorId?: string | null;
 
+    @ApiPropertyOptional({
+        description: "Actor's compact display id, e.g. JINX-USR-738291045",
+    })
+    @Expose()
+    actorUserNumber?: string | null;
+
     @ApiPropertyOptional()
     @Expose()
     actorEmail?: string | null;

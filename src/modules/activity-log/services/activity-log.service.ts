@@ -180,10 +180,12 @@ export class ActivityLogService {
             where: mergedWhere,
             orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             take: limit + 1,
+            include: { actor: { select: { userNumber: true } } },
         });
 
         const hasMore = rows.length > limit;
-        const items = hasMore ? rows.slice(0, limit) : rows;
+        const sliced = hasMore ? rows.slice(0, limit) : rows;
+        const items = sliced.map(row => this.withActorUserNumber(row));
         const nextCursor =
             hasMore && items.length > 0
                 ? this.encodeCursor(items[items.length - 1])
@@ -193,9 +195,22 @@ export class ActivityLogService {
     }
 
     async findById(id: string) {
-        return this.databaseService.activityLog.findUnique({
+        const row = await this.databaseService.activityLog.findUnique({
             where: { id },
+            include: { actor: { select: { userNumber: true } } },
         });
+        return row ? this.withActorUserNumber(row) : null;
+    }
+
+    /**
+     * Flatten the joined actor's current `userNumber` onto the row so it can be
+     * serialized as `actorUserNumber` (display-only; null if the actor was deleted).
+     */
+    private withActorUserNumber<
+        T extends { actor?: { userNumber: string | null } | null },
+    >(row: T): Omit<T, 'actor'> & { actorUserNumber: string | null } {
+        const { actor, ...rest } = row;
+        return { ...rest, actorUserNumber: actor?.userNumber ?? null };
     }
 
     async listActors(_query: ActivityLogActorsQueryDto) {

@@ -23,6 +23,7 @@ import { HelperPaginationService } from 'src/common/helper/services/helper.pagin
 import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic.dto';
 import { ApiPaginatedDataDto } from 'src/common/response/dtos/response.paginated.dto';
 
+import { generateUniqueUserNumber } from '../utils/user.util';
 import { UserUpdateDto } from '../dtos/request/user.update.request';
 import { UserBanDto } from '../dtos/request/user.ban.request';
 import { UserFlagDto } from '../dtos/request/user.flag.request';
@@ -318,6 +319,7 @@ export class UserService implements IUserService {
     ): UserAdminListItemResponseDto {
         return {
             id: user.id,
+            userNumber: user.userNumber,
             email: user.email,
             userName: user.userName,
             firstName: user.firstName,
@@ -459,6 +461,10 @@ export class UserService implements IUserService {
                     generatedPassword
                 );
 
+            const userNumber = await generateUniqueUserNumber(
+                this.databaseService
+            );
+
             const created = await this.databaseService.user.create({
                 data: {
                     email,
@@ -469,6 +475,7 @@ export class UserService implements IUserService {
                     phone: dto.phone ?? null,
                     role: Role.USER,
                     isVerified: dto.markVerified ?? false,
+                    userNumber,
                 },
             });
 

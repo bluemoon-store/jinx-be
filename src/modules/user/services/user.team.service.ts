@@ -21,6 +21,7 @@ import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic
 import { ActivityLogEmitterService } from 'src/modules/activity-log/services/activity-log.emitter.service';
 
 import { TeamInviteRequestDto } from '../dtos/request/team.invite.request';
+import { generateUniqueUserNumber } from '../utils/user.util';
 import {
     TeamMemberStatus,
     TeamUpdateRequestDto,
@@ -125,6 +126,8 @@ export class UserTeamService {
         });
         const reviveTargetId = deletedTeam ? deletedTeam.id : null;
 
+        const userNumber = await generateUniqueUserNumber(this.databaseService);
+
         let created;
         try {
             created = reviveTargetId
@@ -142,6 +145,8 @@ export class UserTeamService {
                           invitationTokenExpiry,
                           deletedAt: null,
                           deactivatedAt: null,
+                          // Keep the existing number; only assign one if missing.
+                          userNumber: deletedTeam?.userNumber ?? userNumber,
                       },
                   })
                 : await this.databaseService.user.create({
@@ -155,6 +160,7 @@ export class UserTeamService {
                           invitedBy: invitedByUserId,
                           invitationToken,
                           invitationTokenExpiry,
+                          userNumber,
                       },
                   });
         } catch (error) {

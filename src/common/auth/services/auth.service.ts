@@ -26,6 +26,7 @@ import { isPrivilegedAdminRole } from 'src/common/request/constants/roles.consta
 import { HelperEncryptionService } from '../../helper/services/helper.encryption.service';
 import { IAuthUser } from '../../request/interfaces/request.interface';
 import { UserService } from 'src/modules/user/services/user.service';
+import { generateUniqueUserNumber } from 'src/modules/user/utils/user.util';
 import { WalletService } from 'src/modules/wallet/services/wallet.service';
 import { TwoFactorDisableDto } from '../dtos/request/auth.2fa.disable.dto';
 import { TwoFactorSetupDto } from '../dtos/request/auth.2fa.setup.dto';
@@ -409,6 +410,10 @@ export class AuthService implements IAuthService {
             const hashed =
                 await this.helperEncryptionService.createHash(password);
 
+            const userNumber = await generateUniqueUserNumber(
+                this.databaseService
+            );
+
             let createdUser;
             try {
                 createdUser = await this.databaseService.user.create({
@@ -419,6 +424,7 @@ export class AuthService implements IAuthService {
                         lastName: lastName?.trim(),
                         role: Role.USER,
                         userName: faker.internet.username(),
+                        userNumber,
                     },
                 });
             } catch (error) {

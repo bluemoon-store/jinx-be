@@ -4,6 +4,7 @@ import * as argon2 from 'argon2';
 import { Command } from 'nestjs-command';
 import { PinoLogger } from 'nestjs-pino';
 import { DatabaseService } from 'src/common/database/services/database.service';
+import { generateUniqueUserNumber } from 'src/modules/user/utils/user.util';
 
 const SEED_EMAIL = 'user@jinx.to';
 const SEED_ADMIN_EMAIL = 'support@bizzjinx.com';
@@ -51,6 +52,9 @@ export class UsersSeedService {
                 isVerified: true,
                 isBanned: false,
                 twoFactorEnabled: false,
+                userNumber: await generateUniqueUserNumber(
+                    this.databaseService
+                ),
             },
         });
 
@@ -106,6 +110,9 @@ export class UsersSeedService {
                 lastName: 'Admin',
                 role: Role.SUPER_ADMIN,
                 isVerified: true,
+                userNumber: await generateUniqueUserNumber(
+                    this.databaseService
+                ),
             },
         });
 

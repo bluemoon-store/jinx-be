@@ -113,10 +113,15 @@ export class OrderAdminController {
         messageKey: 'order.success.statusUpdated',
     })
     public async updateOrderStatus(
+        @AuthUser() user: IAuthUser,
         @Param('id') orderId: string,
         @Body() payload: OrderStatusUpdateDto
     ): Promise<OrderResponseDto> {
-        return this.orderService.updateOrderStatus(orderId, payload);
+        return this.orderService.updateOrderStatus(
+            orderId,
+            payload,
+            user.userId
+        );
     }
 
     @Post(':id/deliver')

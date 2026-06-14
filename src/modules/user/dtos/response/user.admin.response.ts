@@ -17,6 +17,15 @@ export class UserAdminListItemResponseDto {
     @IsUUID()
     id: string;
 
+    @ApiPropertyOptional({
+        nullable: true,
+        description: 'Compact display id, e.g. JINX-USR-738291045',
+    })
+    @Expose()
+    @IsString()
+    @IsOptional()
+    userNumber: string | null;
+
     @ApiProperty()
     @Expose()
     @IsEmail()

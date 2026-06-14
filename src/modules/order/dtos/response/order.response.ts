@@ -348,6 +348,15 @@ export class OrderUserSnapshotDto {
     @IsUUID()
     id: string;
 
+    @ApiPropertyOptional({
+        example: 'JINX-USR-738291045',
+        nullable: true,
+    })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    userNumber: string | null;
+
     @ApiProperty({
         example: faker.internet.email(),
     })
