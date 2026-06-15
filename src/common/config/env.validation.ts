@@ -29,7 +29,6 @@ export function validateEnv(
         if (isProd) {
             throw new Error(message);
         }
-        // eslint-disable-next-line no-console
         console.warn(`${message} (non-production: starting anyway)`);
     }
 

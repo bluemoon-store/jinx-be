@@ -132,23 +132,6 @@ export const ENV_SPEC: EnvGroupSpec[] = [
         ],
     },
     {
-        group: 'pdf',
-        label: 'PDF / receipt render service',
-        vars: [
-            {
-                key: 'PDF_SERVICE_URL',
-                required: true,
-                note: 'jinx-pdf base URL for server-to-server renders',
-            },
-            {
-                key: 'RENDER_SHARED_SECRET',
-                required: true,
-                secret: true,
-                note: 'Must match jinx-pdf RENDER_SHARED_SECRET',
-            },
-        ],
-    },
-    {
         group: 'payments-fiat',
         label: 'Fiat payments (Chime)',
         vars: [

@@ -8,7 +8,7 @@ import { CustomerMetricsService } from 'src/modules/dashboard/services/customer-
 import { DashboardReportService } from 'src/modules/dashboard/services/dashboard-report.service';
 import { DashboardService } from 'src/modules/dashboard/services/dashboard.service';
 import { SalesMetricsService } from 'src/modules/dashboard/services/sales-metrics.service';
-import { OrderImageService } from 'src/modules/order/services/order-image.service';
+import { OrderReceiptService } from 'src/modules/order/services/order-receipt.service';
 import { workerOnlyProviders } from 'src/common/utils/role.util';
 
 import { EmailProcessorWorker } from './processors/email.processor';
@@ -34,7 +34,7 @@ const workers = workerOnlyProviders([
     ],
     providers: [
         ...workers,
-        OrderImageService,
+        OrderReceiptService,
         SalesMetricsService,
         CustomerMetricsService,
         DashboardService,

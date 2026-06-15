@@ -23,13 +23,13 @@ import {
 import { IEmailAttachment } from 'src/common/email/interfaces/smtp.service.interface';
 import { HelperEmailService } from 'src/common/helper/services/helper.email.service';
 import { DashboardReportService } from 'src/modules/dashboard/services/dashboard-report.service';
-import { OrderImageService } from 'src/modules/order/services/order-image.service';
+import { OrderReceiptService } from 'src/modules/order/services/order-receipt.service';
 
 @Processor(APP_BULL_QUEUES.EMAIL)
 export class EmailProcessorWorker {
     constructor(
         private readonly helperEmailService: HelperEmailService,
-        private readonly orderImageService: OrderImageService,
+        private readonly orderReceiptService: OrderReceiptService,
         private readonly dashboardReportService: DashboardReportService,
         private readonly logger: PinoLogger
     ) {
@@ -163,16 +163,17 @@ export class EmailProcessorWorker {
         );
 
         try {
-            // Best-effort order-summary image; never blocks the email on failure.
-            const attachment = await this.orderImageService.generateOrderImage(
-                data.orderId,
-                {
-                    orderNumber: data.order_id,
-                    paymentMethod: data.payment_method,
-                    amount: data.amount,
-                    date: data.date,
-                }
-            );
+            // Best-effort order-summary PDF; never blocks the email on failure.
+            const attachment =
+                await this.orderReceiptService.generateOrderReceipt(
+                    data.orderId,
+                    {
+                        orderNumber: data.order_id,
+                        paymentMethod: data.payment_method,
+                        amount: data.amount,
+                        date: data.date,
+                    }
+                );
 
             await this.helperEmailService.sendEmail({
                 emails: toEmails,
@@ -185,7 +186,7 @@ export class EmailProcessorWorker {
                 {
                     jobId: job.id,
                     recipients: toEmails.length,
-                    withImage: !!attachment,
+                    withReceipt: !!attachment,
                 },
                 'order-confirmed emails sent successfully'
             );

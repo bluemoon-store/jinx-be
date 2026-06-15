@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import { renderToBuffer } from '@react-pdf/renderer';
 import { PinoLogger } from 'nestjs-pino';
 
 import { DatabaseService } from 'src/common/database/services/database.service';
 import { IEmailAttachment } from 'src/common/email/interfaces/smtp.service.interface';
+import { OrderReceiptDocument } from '../reports/order-receipt.document';
 
-interface OrderImageMeta {
+interface OrderReceiptMeta {
     orderNumber: string;
     paymentMethod: string;
     amount: string;
@@ -14,27 +14,24 @@ interface OrderImageMeta {
 }
 
 @Injectable()
-export class OrderImageService {
+export class OrderReceiptService {
     constructor(
         private readonly databaseService: DatabaseService,
-        private readonly configService: ConfigService,
         private readonly logger: PinoLogger
     ) {
-        this.logger.setContext(OrderImageService.name);
+        this.logger.setContext(OrderReceiptService.name);
     }
 
     /**
-     * Renders an order-summary PNG via the jinx-pdf service and returns it as an
-     * email attachment. Returns null (never throws) when unconfigured or on any
-     * error, so order-confirmation emails still send without the image.
+     * Renders an order-summary PDF locally (via @react-pdf/renderer) and returns
+     * it as an email attachment. Returns null (never throws) when there is no
+     * order or on any error, so order-confirmation emails still send without it.
      */
-    async generateOrderImage(
+    async generateOrderReceipt(
         orderId: string | undefined,
-        meta: OrderImageMeta
+        meta: OrderReceiptMeta
     ): Promise<IEmailAttachment | null> {
-        const baseUrl = this.configService.get<string>('render.pdfServiceUrl');
-        const secret = this.configService.get<string>('render.secret');
-        if (!orderId || !baseUrl || !secret) {
+        if (!orderId) {
             return null;
         }
 
@@ -59,25 +56,17 @@ export class OrderImageService {
                 })),
             };
 
-            const res = await axios.post(
-                `${baseUrl.replace(/\/$/, '')}/api/order-image`,
-                dto,
-                {
-                    headers: { 'x-render-secret': secret },
-                    responseType: 'arraybuffer',
-                    timeout: 10000,
-                }
-            );
+            const content = await renderToBuffer(OrderReceiptDocument(dto));
 
             return {
-                filename: `order-${meta.orderNumber}.png`,
-                content: Buffer.from(res.data),
-                contentType: 'image/png',
+                filename: `order-${meta.orderNumber}.pdf`,
+                content,
+                contentType: 'application/pdf',
             };
         } catch (error) {
             this.logger.warn(
                 { orderId, error: error.message },
-                'Failed to render order-summary image; sending email without it'
+                'Failed to render order-summary PDF; sending email without it'
             );
             return null;
         }
