@@ -16,6 +16,28 @@ const usd = new Intl.NumberFormat('en-US', {
     currency: 'USD',
 });
 const integer = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const dayFormatter = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+});
+const monthDayFormatter = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+});
+
+/** "May 16 – Jun 15, 2026" — a human-readable inclusive date range. */
+function rangeLabel(start: Date, end: Date): string {
+    return `${monthDayFormatter.format(start)} – ${dayFormatter.format(end)}`;
+}
+
+/** Share of `value` within `total`, formatted as a whole percent (e.g. "32%"). */
+function share(value: number, total: number): string {
+    if (!(total > 0)) return '0%';
+    return `${Math.round((value / total) * 100)}%`;
+}
 
 function money(value: string | number): string {
     const n = typeof value === 'number' ? value : Number.parseFloat(value);
@@ -93,13 +115,60 @@ export class DashboardReportService {
             year: 'numeric',
             timeZone: 'UTC',
         }).format(now);
+        const thirtyDaysAgo = new Date(
+            now.getTime() - 30 * 24 * 60 * 60 * 1000
+        );
+
+        // Payment mix: order by volume and annotate each method's share.
+        const paymentTotal = paymentMix.items.reduce(
+            (sum, item) => sum + Number(item.value || 0),
+            0
+        );
+        const paymentMixItems = [...paymentMix.items]
+            .sort((a, b) => Number(b.value || 0) - Number(a.value || 0))
+            .map(item => ({
+                name: item.name,
+                value: `${count(item.value)} payments · ${share(Number(item.value || 0), paymentTotal)}`,
+            }));
+
+        // Top categories: rank them and show each one's share of listed revenue.
+        const categoryTotal = topCategories.items.reduce(
+            (sum, item) => sum + Number.parseFloat(item.revenue || '0'),
+            0
+        );
+        const topCategoryItems = topCategories.items.map((item, i) => ({
+            name: `${i + 1}. ${item.name}`,
+            value: `${money(item.revenue)} · ${share(Number.parseFloat(item.revenue || '0'), categoryTotal)}`,
+        }));
 
         const data: DashboardReportData = {
             monthLabel,
             generatedAt: now.toISOString(),
             sections: [
                 {
-                    title: `This month (${monthLabel}, to date)`,
+                    title: 'Today',
+                    subtitle: dayFormatter.format(now),
+                    metrics: [
+                        metric(
+                            'Revenue',
+                            money(today.revenue.value),
+                            today.revenue
+                        ),
+                        metric(
+                            'New paid orders',
+                            count(today.newOrders.value),
+                            today.newOrders
+                        ),
+                        metric(
+                            'Avg order value',
+                            money(today.avgOrderValue.value),
+                            today.avgOrderValue
+                        ),
+                    ],
+                },
+                {
+                    title: 'This month',
+                    subtitle: `${monthLabel}, to date`,
                     metrics: [
                         metric('Revenue', money(monthRevenue)),
                         metric('Paid orders', count(monthOrders)),
@@ -107,27 +176,8 @@ export class DashboardReportService {
                     ],
                 },
                 {
-                    title: 'Lifetime',
-                    metrics: [
-                        metric(
-                            'Revenue',
-                            money(summary.revenue.value),
-                            summary.revenue
-                        ),
-                        metric(
-                            'Orders',
-                            count(summary.orders.value),
-                            summary.orders
-                        ),
-                        metric(
-                            'Customers',
-                            count(summary.customers.value),
-                            summary.customers
-                        ),
-                    ],
-                },
-                {
                     title: 'Last 30 days',
+                    subtitle: rangeLabel(thirtyDaysAgo, now),
                     metrics: [
                         metric(
                             'Avg order value',
@@ -147,34 +197,29 @@ export class DashboardReportService {
                     ],
                 },
                 {
-                    title: 'Today',
+                    title: 'Lifetime',
+                    subtitle: 'All time',
                     metrics: [
                         metric(
                             'Revenue',
-                            money(today.revenue.value),
-                            today.revenue
+                            money(summary.revenue.value),
+                            summary.revenue
                         ),
                         metric(
-                            'New paid orders',
-                            count(today.newOrders.value),
-                            today.newOrders
+                            'Orders',
+                            count(summary.orders.value),
+                            summary.orders
                         ),
                         metric(
-                            'Avg order value',
-                            money(today.avgOrderValue.value),
-                            today.avgOrderValue
+                            'Customers',
+                            count(summary.customers.value),
+                            summary.customers
                         ),
                     ],
                 },
             ],
-            topCategories: topCategories.items.map(item => ({
-                name: item.name,
-                value: money(item.revenue),
-            })),
-            paymentMix: paymentMix.items.map(item => ({
-                name: item.name,
-                value: `${count(item.value)} payments`,
-            })),
+            topCategories: topCategoryItems,
+            paymentMix: paymentMixItems,
         };
 
         return renderToBuffer(DashboardReportDocument(data));

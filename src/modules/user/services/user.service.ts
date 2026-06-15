@@ -32,9 +32,10 @@ import { UserFlagDto } from '../dtos/request/user.flag.request';
 import { UserAdminCreateDto } from '../dtos/request/user.admin.create.request';
 import { UserListQueryDto } from '../dtos/request/user.list.query.request';
 import {
+    USER_EXPORT_FIELDS,
+    UserExportField,
     UserExportFormat,
     UserExportQueryDto,
-    UserExportScope,
 } from '../dtos/request/user.export.query.request';
 import {
     UserGetProfileResponseDto,
@@ -430,10 +431,94 @@ export class UserService implements IUserService {
         const EXPORT_ROW_CAP = 50_000;
         const BATCH_SIZE = 1000;
 
-        const scope = query.scope ?? UserExportScope.FULL;
         const format = query.format ?? UserExportFormat.CSV;
         const where = this.buildUserListWhere(query);
-        const includeWallet = scope === UserExportScope.FULL;
+
+        // Resolve the selected columns: keep only known keys, in canonical
+        // order. An empty/absent selection falls back to all fields.
+        const requested = new Set(
+            (query.fields ?? '')
+                .split(',')
+                .map(f => f.trim())
+                .filter(Boolean)
+        );
+        const selected: UserExportField[] = USER_EXPORT_FIELDS.filter(
+            f => requested.size === 0 || requested.has(f)
+        );
+
+        const includeWallet = selected.includes('walletBalance');
+
+        type CsvValue = string | number | boolean | null | undefined;
+        const FIELD_CONFIG: Record<
+            UserExportField,
+            {
+                header: string;
+                label: string;
+                csv: (u: UserWithWallet) => CsvValue;
+                txt: (u: UserWithWallet) => string;
+            }
+        > = {
+            userNumber: {
+                header: 'userNumber',
+                label: 'User number',
+                csv: u => u.userNumber,
+                txt: u => u.userNumber ?? '—',
+            },
+            name: {
+                header: 'name',
+                label: 'Name',
+                csv: u => u.name,
+                txt: u => u.name ?? '—',
+            },
+            email: {
+                header: 'email',
+                label: 'Email',
+                csv: u => u.email,
+                txt: u => u.email,
+            },
+            phone: {
+                header: 'phone',
+                label: 'Phone',
+                csv: u => u.phone,
+                txt: u => u.phone ?? '—',
+            },
+            isVerified: {
+                header: 'isVerified',
+                label: 'Verified',
+                csv: u => u.isVerified,
+                txt: u => (u.isVerified ? 'yes' : 'no'),
+            },
+            role: {
+                header: 'role',
+                label: 'Role',
+                csv: u => u.role,
+                txt: u => u.role,
+            },
+            isBanned: {
+                header: 'isBanned',
+                label: 'Banned',
+                csv: u => u.isBanned,
+                txt: u => (u.isBanned ? 'yes' : 'no'),
+            },
+            isFlagged: {
+                header: 'isFlagged',
+                label: 'Flagged',
+                csv: u => u.isFlagged,
+                txt: u => (u.isFlagged ? 'yes' : 'no'),
+            },
+            walletBalance: {
+                header: 'walletBalance',
+                label: 'Wallet balance',
+                csv: u => u.wallet?.balance?.toString() ?? '',
+                txt: u => u.wallet?.balance?.toString() ?? '0',
+            },
+            createdAt: {
+                header: 'createdAt',
+                label: 'Created',
+                csv: u => u.createdAt.toISOString(),
+                txt: u => u.createdAt.toISOString(),
+            },
+        };
 
         const ext = format === UserExportFormat.TXT ? 'txt' : 'csv';
         const date = new Date().toISOString().slice(0, 10);
@@ -445,29 +530,12 @@ export class UserService implements IUserService {
         );
         res.setHeader(
             'Content-Disposition',
-            `attachment; filename="users-${scope}-${date}.${ext}"`
+            `attachment; filename="users-${date}.${ext}"`
         );
 
-        const fullColumns = [
-            'userNumber',
-            'name',
-            'email',
-            'phone',
-            'isVerified',
-            'role',
-            'isBanned',
-            'isFlagged',
-            'walletBalance',
-            'createdAt',
-        ];
-
-        // Header row (CSV only; emails-txt and full-txt are headerless).
+        // Header row (CSV only; TXT uses labelled blocks).
         if (format === UserExportFormat.CSV) {
-            res.write(
-                scope === UserExportScope.EMAILS
-                    ? csvLine(['email'])
-                    : csvLine(fullColumns)
-            );
+            res.write(csvLine(selected.map(f => FIELD_CONFIG[f].header)));
         }
 
         let cursor: { createdAt: Date; id: string } | undefined;
@@ -501,45 +569,19 @@ export class UserService implements IUserService {
             }
 
             for (const user of batch) {
-                if (scope === UserExportScope.EMAILS) {
+                const u = user as UserWithWallet;
+                if (format === UserExportFormat.CSV) {
                     res.write(
-                        format === UserExportFormat.CSV
-                            ? csvLine([user.email])
-                            : `${user.email}\n`
-                    );
-                } else if (format === UserExportFormat.CSV) {
-                    res.write(
-                        csvLine([
-                            user.userNumber,
-                            user.name,
-                            user.email,
-                            user.phone,
-                            user.isVerified,
-                            user.role,
-                            user.isBanned,
-                            user.isFlagged,
-                            (
-                                user as UserWithWallet
-                            ).wallet?.balance?.toString() ?? '',
-                            user.createdAt.toISOString(),
-                        ])
+                        csvLine(selected.map(f => FIELD_CONFIG[f].csv(u)))
                     );
                 } else {
-                    // full + txt: a labelled block per user.
-                    const wallet =
-                        (user as UserWithWallet).wallet?.balance?.toString() ??
-                        '0';
+                    // TXT: a labelled block per user, selected fields only.
                     res.write(
                         [
-                            `User: ${user.name} (${user.userNumber ?? '—'})`,
-                            `Email: ${user.email}`,
-                            `Phone: ${user.phone ?? '—'}`,
-                            `Verified: ${user.isVerified ? 'yes' : 'no'}`,
-                            `Role: ${user.role}`,
-                            `Banned: ${user.isBanned ? 'yes' : 'no'}`,
-                            `Flagged: ${user.isFlagged ? 'yes' : 'no'}`,
-                            `Wallet balance: ${wallet}`,
-                            `Created: ${user.createdAt.toISOString()}`,
+                            ...selected.map(
+                                f =>
+                                    `${FIELD_CONFIG[f].label}: ${FIELD_CONFIG[f].txt(u)}`
+                            ),
                             '',
                         ].join('\n')
                     );

@@ -6,6 +6,7 @@ import * as redisStore from 'cache-manager-ioredis';
 
 import { AuthModule } from './auth/auth.module';
 import configs from './config';
+import { validateEnv } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { CustomLoggerModule } from './logger/logger.module';
 import { RequestModule } from './request/request.module';
@@ -20,6 +21,9 @@ import { ResponseModule } from './response/response.module';
             cache: true,
             envFilePath: ['.env'],
             expandVariables: true,
+            // Fail-fast on a misconfigured deploy: in production a missing
+            // required var throws here and the container never starts.
+            validate: validateEnv,
         }),
 
         // Core Infrastructure

@@ -9,8 +9,10 @@ export interface IHelperEncryptionService {
     createJwtTokens(payload: IAuthUser): Promise<IAuthTokenResponse>;
     createAccessToken(payload: IAuthUser): Promise<string>;
     createRefreshToken(payload: IAuthUser): Promise<string>;
-    createTwoFactorToken(userId: string): Promise<string>;
-    verifyTwoFactorToken(token: string): Promise<{ userId: string }>;
+    createTwoFactorToken(userId: string, rememberMe?: boolean): Promise<string>;
+    verifyTwoFactorToken(
+        token: string
+    ): Promise<{ userId: string; rememberMe: boolean }>;
     createHash(password: string): Promise<string>;
     match(hash: string, password: string): Promise<boolean>;
     encrypt(text: string): Promise<IEncryptDataPayload>;

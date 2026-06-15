@@ -211,7 +211,7 @@ export class AuthService implements IAuthService {
     public async adminLogin(
         data: AdminLoginDto
     ): Promise<AdminLoginChallengeResponseDto | AuthResponseDto> {
-        const { email, password } = data;
+        const { email, password, rememberMe } = data;
 
         // Admin portal: authenticate the TEAM (non-USER) account only.
         const user = await this.databaseService.user.findFirst({
@@ -269,6 +269,7 @@ export class AuthService implements IAuthService {
             const tokens = await this.helperEncryptionService.createJwtTokens({
                 role: user.role,
                 userId: user.id,
+                rememberMe,
             });
 
             return {
@@ -279,8 +280,13 @@ export class AuthService implements IAuthService {
 
         await this.issueAdminLoginOtp(user.id, user.email);
 
+        // Carry the remember-me choice through the OTP step inside the
+        // challenge token, so it can't be tampered with between steps.
         const challengeToken =
-            await this.helperEncryptionService.createTwoFactorToken(user.id);
+            await this.helperEncryptionService.createTwoFactorToken(
+                user.id,
+                rememberMe
+            );
 
         return { challengeToken };
     }
@@ -288,7 +294,7 @@ export class AuthService implements IAuthService {
     public async verifyAdminLoginOtp(
         data: AdminVerifyOtpDto
     ): Promise<AuthResponseDto> {
-        const { userId } =
+        const { userId, rememberMe } =
             await this.helperEncryptionService.verifyTwoFactorToken(
                 data.challengeToken
             );
@@ -331,6 +337,7 @@ export class AuthService implements IAuthService {
         const tokens = await this.helperEncryptionService.createJwtTokens({
             role: user.role,
             userId: user.id,
+            rememberMe,
         });
 
         return {
@@ -551,6 +558,8 @@ export class AuthService implements IAuthService {
         return this.helperEncryptionService.createJwtTokens({
             userId: payload.userId,
             role: payload.role,
+            // Preserve the extended lifetime across refreshes (rides in the JWT).
+            rememberMe: payload.rememberMe,
         });
     }
 

@@ -10,6 +10,8 @@ export interface DashboardReportMetric {
 
 export interface DashboardReportSection {
     title: string;
+    /** Optional context line under the title, e.g. the period date range. */
+    subtitle?: string;
     metrics: DashboardReportMetric[];
 }
 
@@ -67,6 +69,14 @@ const styles = StyleSheet.create({
         fontFamily: 'Helvetica-Bold',
         marginBottom: 10,
     },
+    sectionTitleTight: {
+        marginBottom: 2,
+    },
+    sectionSubtitle: {
+        fontSize: 9,
+        color: '#6b7280',
+        marginBottom: 10,
+    },
     metricRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -121,10 +131,24 @@ function deltaStyle(trend?: 'up' | 'down' | 'flat') {
 
 function formatDelta(metric: DashboardReportMetric): string | null {
     if (metric.deltaPct === undefined) return null;
-    const arrow =
-        metric.trend === 'up' ? '▲' : metric.trend === 'down' ? '▼' : '–';
+    // Direction is conveyed by the +/- sign and the colour (deltaStyle); avoid
+    // arrow glyphs since the core Helvetica font has no triangle characters.
     const sign = metric.deltaPct > 0 ? '+' : '';
-    return `${arrow} ${sign}${metric.deltaPct.toFixed(1)}% vs prev`;
+    return `${sign}${metric.deltaPct.toFixed(1)}% vs prev period`;
+}
+
+const generatedAtFormatter = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+});
+
+function formatGeneratedAt(iso: string): string {
+    return `${generatedAtFormatter.format(new Date(iso))} UTC`;
 }
 
 function renderMetric(metric: DashboardReportMetric, key: number) {
@@ -148,7 +172,18 @@ function renderSection(section: DashboardReportSection, key: number) {
     return e(
         View,
         { key, style: styles.section },
-        e(Text, { style: styles.sectionTitle }, section.title),
+        e(
+            Text,
+            {
+                style: section.subtitle
+                    ? [styles.sectionTitle, styles.sectionTitleTight]
+                    : styles.sectionTitle,
+            },
+            section.title
+        ),
+        section.subtitle
+            ? e(Text, { style: styles.sectionSubtitle }, section.subtitle)
+            : null,
         e(
             View,
             { style: styles.metricRow },
@@ -198,7 +233,7 @@ export function DashboardReportDocument(data: DashboardReportData) {
                 e(
                     Text,
                     { style: styles.subtitle },
-                    `Generated ${new Date(data.generatedAt).toUTCString()}`
+                    `Generated ${formatGeneratedAt(data.generatedAt)}`
                 )
             ),
             ...data.sections.map((s, i) => renderSection(s, i)),

@@ -1,6 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+    IsBoolean,
+    IsEmail,
+    IsNotEmpty,
+    IsOptional,
+    IsString,
+} from 'class-validator';
 
 /** Admin panel login (step 1). On success an email OTP is sent; complete via /auth/admin/verify-otp. */
 export class AdminLoginDto {
@@ -33,4 +39,13 @@ export class AdminLoginDto {
     @IsString()
     @IsOptional()
     public turnstileToken?: string;
+
+    @ApiPropertyOptional({
+        description:
+            'Keep the session for 30 days (extends the refresh-token lifetime).',
+        default: false,
+    })
+    @IsBoolean()
+    @IsOptional()
+    public rememberMe?: boolean;
 }

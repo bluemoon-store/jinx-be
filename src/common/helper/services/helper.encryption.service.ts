@@ -25,6 +25,7 @@ const TWO_FACTOR_CHALLENGE_JWT_TYPE = '2fa-challenge' as const;
 type TwoFactorChallengePayload = {
     userId: string;
     type: typeof TWO_FACTOR_CHALLENGE_JWT_TYPE;
+    rememberMe?: boolean;
 };
 
 @Injectable()
@@ -40,6 +41,7 @@ export class HelperEncryptionService implements IHelperEncryptionService {
     private readonly refreshTokenSecret: string;
     private readonly accessTokenExpire: string;
     private readonly refreshTokenExpire: string;
+    private readonly rememberRefreshTokenExpire: string;
 
     constructor(
         private readonly configService: ConfigService,
@@ -56,6 +58,9 @@ export class HelperEncryptionService implements IHelperEncryptionService {
         );
         this.refreshTokenExpire = this.configService.getOrThrow<string>(
             'auth.refreshToken.tokenExp'
+        );
+        this.rememberRefreshTokenExpire = this.configService.getOrThrow<string>(
+            'auth.refreshToken.rememberTokenExp'
         );
     }
 
@@ -77,16 +82,25 @@ export class HelperEncryptionService implements IHelperEncryptionService {
     }
 
     public createRefreshToken(payload: IAuthUser): Promise<string> {
+        // "Remember for 30 days" extends the refresh-token lifetime; the access
+        // token stays short and is silently refreshed by the client.
+        const expiresIn = payload.rememberMe
+            ? this.rememberRefreshTokenExpire
+            : this.refreshTokenExpire;
         return this.jwtService.signAsync(payload, {
             secret: this.refreshTokenSecret,
-            expiresIn: this.refreshTokenExpire as StringValue,
+            expiresIn: expiresIn as StringValue,
         });
     }
 
-    public createTwoFactorToken(userId: string): Promise<string> {
+    public createTwoFactorToken(
+        userId: string,
+        rememberMe = false
+    ): Promise<string> {
         const payload: TwoFactorChallengePayload = {
             userId,
             type: TWO_FACTOR_CHALLENGE_JWT_TYPE,
+            rememberMe,
         };
         return this.jwtService.signAsync(payload, {
             secret: this.accessTokenSecret,
@@ -96,6 +110,7 @@ export class HelperEncryptionService implements IHelperEncryptionService {
 
     public async verifyTwoFactorToken(token: string): Promise<{
         userId: string;
+        rememberMe: boolean;
     }> {
         try {
             const payload = await this.jwtService.verifyAsync<
@@ -112,7 +127,10 @@ export class HelperEncryptionService implements IHelperEncryptionService {
                     'auth.error.twoFactorChallengeInvalid'
                 );
             }
-            return { userId: payload.userId };
+            return {
+                userId: payload.userId,
+                rememberMe: payload.rememberMe === true,
+            };
         } catch (error) {
             if (error instanceof UnauthorizedException) {
                 throw error;

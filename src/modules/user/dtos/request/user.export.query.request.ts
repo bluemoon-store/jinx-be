@@ -1,21 +1,37 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
 
-export enum UserExportScope {
-    EMAILS = 'emails',
-    FULL = 'full',
-}
-
 export enum UserExportFormat {
     CSV = 'csv',
     TXT = 'txt',
 }
 
 /**
+ * Canonical, ordered set of fields that can be exported. The admin toggles a
+ * subset of these in the UI; the export emits exactly the selected fields, in
+ * this order. Kept here so the service can validate the incoming `fields` list
+ * against a single source of truth.
+ */
+export const USER_EXPORT_FIELDS = [
+    'userNumber',
+    'name',
+    'email',
+    'phone',
+    'isVerified',
+    'role',
+    'isBanned',
+    'isFlagged',
+    'walletBalance',
+    'createdAt',
+] as const;
+
+export type UserExportField = (typeof USER_EXPORT_FIELDS)[number];
+
+/**
  * Query parameters for exporting users (admin). Mirrors the list filters so the
- * export honours the same search/tab the admin is viewing, plus the chosen
- * scope (emails-only vs full) and file format (csv vs txt). No pagination — the
- * export streams the full filtered result set (capped server-side).
+ * export honours the same search/tab the admin is viewing, plus the chosen file
+ * format (csv vs txt) and the selected columns. No pagination — the export
+ * streams the full filtered result set (capped server-side).
  */
 export class UserExportQueryDto {
     @ApiPropertyOptional({
@@ -43,13 +59,14 @@ export class UserExportQueryDto {
     isFlagged?: boolean;
 
     @ApiPropertyOptional({
-        description: 'Export scope: emails only or full user record',
-        enum: UserExportScope,
-        default: UserExportScope.FULL,
+        description:
+            'Comma-separated list of columns to include. Allowed keys: ' +
+            USER_EXPORT_FIELDS.join(', ') +
+            '. Unknown keys are ignored; if empty, all fields are exported.',
     })
     @IsOptional()
-    @IsEnum(UserExportScope)
-    scope?: UserExportScope;
+    @IsString()
+    fields?: string;
 
     @ApiPropertyOptional({
         description: 'File format',
