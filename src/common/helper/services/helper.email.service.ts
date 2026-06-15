@@ -33,6 +33,15 @@ export class HelperEmailService implements IHelperEmailService {
         private readonly logger: PinoLogger
     ) {
         this.logger.setContext(HelperEmailService.name);
+
+        // Renders admin-authored multiline copy safely: HTML-escape the value,
+        // then turn newlines into <br> so paragraphs survive in the email.
+        Handlebars.registerHelper('nl2br', (value: unknown) => {
+            const escaped = Handlebars.escapeExpression(
+                value == null ? '' : String(value)
+            );
+            return new Handlebars.SafeString(escaped.replace(/\r?\n/g, '<br>'));
+        });
     }
 
     async sendEmail({
@@ -40,8 +49,10 @@ export class HelperEmailService implements IHelperEmailService {
         emails,
         payload,
         attachments,
+        subject: subjectOverride,
     }: ISendEmailParams): Promise<IEmailSendResult> {
-        const subject = this.resolveSubject(emailType);
+        const subject =
+            subjectOverride?.trim() || this.resolveSubject(emailType);
         const html = this.renderTemplate(
             emailType,
             await this.mergeCommonContext(payload ?? {})
@@ -107,6 +118,8 @@ export class HelperEmailService implements IHelperEmailService {
                 EMAIL_TEMPLATE_SUBJECTS.RESET_PASSWORD_LINK,
             [EMAIL_TEMPLATES.WELCOME_TO_JINX_MANAGEMENT]:
                 EMAIL_TEMPLATE_SUBJECTS.WELCOME_TO_JINX_MANAGEMENT,
+            [EMAIL_TEMPLATES.ACCOUNT_CREATED_WITH_PASSWORD]:
+                EMAIL_TEMPLATE_SUBJECTS.ACCOUNT_CREATED_WITH_PASSWORD,
             [EMAIL_TEMPLATES.ACCOUNT_PERMANENTLY_BANNED]:
                 EMAIL_TEMPLATE_SUBJECTS.ACCOUNT_PERMANENTLY_BANNED,
             [EMAIL_TEMPLATES.ADMIN_PASSWORD_CHANGED]:

@@ -680,6 +680,11 @@ export class WalletService implements IWalletService {
                     dto.amountUsd
                 );
 
+            const platformWalletAddress =
+                await this.systemWalletService.getPlatformWalletAddress(
+                    dto.cryptocurrency
+                );
+
             const topUp = await this.databaseService.walletTopUp.create({
                 data: {
                     walletId: wallet.id,
@@ -692,10 +697,7 @@ export class WalletService implements IWalletService {
                     amount: new Prisma.Decimal(cryptoAmount),
                     amountUsd: new Prisma.Decimal(dto.amountUsd),
                     exchangeRate: new Prisma.Decimal(exchangeRate),
-                    platformWalletAddress:
-                        this.systemWalletService.getPlatformWalletAddress(
-                            dto.cryptocurrency
-                        ),
+                    platformWalletAddress,
                     status: PaymentStatus.PENDING,
                     requiredConfirmations: this.getRequiredConfirmations(
                         dto.cryptocurrency

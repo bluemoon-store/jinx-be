@@ -881,6 +881,7 @@ export class OrderService implements IOrderService {
                                     },
                                 },
                                 cryptoPayment: true,
+                                fiatPayment: true,
                             },
                         });
                     }
@@ -936,6 +937,23 @@ export class OrderService implements IOrderService {
                             error: deliveryError?.message,
                         },
                         'Failed to process instant delivery after status update'
+                    );
+                }
+
+                // Send the order-confirmed email when an admin manually approves
+                // an order. Only fire on the transition INTO COMPLETED so we don't
+                // double-send for orders already confirmed via the auto-confirm
+                // payment paths (wallet/crypto/fiat), which enqueue this email
+                // themselves.
+                if (order.status !== OrderStatus.COMPLETED) {
+                    const paymentMethod =
+                        updatedOrder.cryptoPayment?.cryptocurrency ??
+                        updatedOrder.fiatPayment?.gateway ??
+                        'Manual';
+                    await this.enqueueOrderConfirmedEmail(
+                        orderId,
+                        paymentMethod,
+                        Number(updatedOrder.totalAmount)
                     );
                 }
             }

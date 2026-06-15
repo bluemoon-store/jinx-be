@@ -6,11 +6,15 @@ export interface ISendEmailParams {
     emails: string[];
     payload: Record<string, any>;
     attachments?: IEmailAttachment[];
+    // Optional per-send subject override; falls back to the template default.
+    subject?: string;
 }
 
 export interface ISendEmailBasePayload<T> {
     data: T;
     toEmails: string[];
+    // Optional per-send subject override; falls back to the template default.
+    subject?: string;
 }
 
 export interface IForgotPasswordOtpPayload {
@@ -34,6 +38,12 @@ export interface IWelcomeToJinxManagementPayload {
     admin_role: string;
     temporary_password: string;
     admin_panel_link: string;
+}
+
+export interface IAccountCreatedWithPasswordPayload {
+    user_email: string;
+    generated_password: string;
+    login_link: string;
 }
 
 export type IAccountBannedPayload = Record<string, never>;
@@ -88,6 +98,10 @@ export interface IScheduledMaintenancePayload {
     date: string;
     start_time: string;
     end_time: string;
+    title: string;
+    intro: string;
+    impact_note: string;
+    apology_note: string;
 }
 
 export interface IMonthlyStoreReportPayload {

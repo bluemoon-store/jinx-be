@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from 'crypto';
+import { randomBytes, randomInt, randomUUID } from 'crypto';
 
 import { InjectQueue } from '@nestjs/bull';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
@@ -12,6 +12,7 @@ import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { DatabaseService } from 'src/common/database/services/database.service';
 import { EMAIL_TEMPLATES } from 'src/common/email/enums/email-template.enum';
 import {
+    IAccountCreatedWithPasswordPayload,
     IAdminLoginOtpPayload,
     IAdminPasswordChangedPayload,
     IForgotPasswordOtpPayload,
@@ -496,10 +497,12 @@ export class AuthService implements IAuthService {
             );
         }
 
-        // The guest never signs in with this password; it's a placeholder so the
-        // required column is satisfied. They claim the account via forgot-password.
+        // Generate a real temporary password (mirrors the team-invite flow) and
+        // email it to the guest below so it becomes their actual login credential
+        // for next time — not a throwaway. They can change it in Account Settings.
+        const temporaryPassword = randomBytes(9).toString('base64url');
         const hashed =
-            await this.helperEncryptionService.createHash(randomUUID());
+            await this.helperEncryptionService.createHash(temporaryPassword);
 
         const userNumber = await generateUniqueUserNumber(this.databaseService);
 
@@ -533,6 +536,21 @@ export class AuthService implements IAuthService {
         }
 
         await this.walletService.createWallet(createdUser.id);
+
+        // Email the guest their new account credentials (fire-and-forget, like the
+        // team-invite email). Only ever runs on first creation — a re-checkout with
+        // the same email hits the 409 above, so we never re-send to existing accounts.
+        const loginLink = `${this.configService.get<string>(
+            'app.frontendUrl'
+        )}/login`;
+        this.emailQueue.add(EMAIL_TEMPLATES.ACCOUNT_CREATED_WITH_PASSWORD, {
+            data: {
+                user_email: email,
+                generated_password: temporaryPassword,
+                login_link: loginLink,
+            },
+            toEmails: [email],
+        } as ISendEmailBasePayload<IAccountCreatedWithPasswordPayload>);
 
         const tokens = await this.helperEncryptionService.createJwtTokens({
             role: createdUser.role,

@@ -1,5 +1,11 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsISO8601, IsString, Matches } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+    IsISO8601,
+    IsOptional,
+    IsString,
+    Matches,
+    MaxLength,
+} from 'class-validator';
 
 export class SettingsScheduleMaintenanceRequestDto {
     @ApiProperty({
@@ -28,4 +34,51 @@ export class SettingsScheduleMaintenanceRequestDto {
         message: 'settings.error.invalidMaintenanceTime',
     })
     endTime: string;
+
+    @ApiPropertyOptional({
+        description:
+            'Custom email subject. Falls back to the default maintenance subject when omitted.',
+        example: 'Scheduled maintenance notice',
+    })
+    @IsOptional()
+    @IsString()
+    @MaxLength(120)
+    subject?: string;
+
+    @ApiPropertyOptional({
+        description:
+            'Custom email title (heading). Falls back to the default when omitted.',
+        example: 'Scheduled Maintenance',
+    })
+    @IsOptional()
+    @IsString()
+    @MaxLength(120)
+    title?: string;
+
+    @ApiPropertyOptional({
+        description:
+            'Intro paragraph shown under the title. Newlines are rendered as line breaks. Falls back to the default when omitted.',
+    })
+    @IsOptional()
+    @IsString()
+    @MaxLength(1000)
+    intro?: string;
+
+    @ApiPropertyOptional({
+        description:
+            'Impact note describing what is affected during the window. Falls back to the default when omitted.',
+    })
+    @IsOptional()
+    @IsString()
+    @MaxLength(600)
+    impactNote?: string;
+
+    @ApiPropertyOptional({
+        description:
+            'Closing apology / appreciation note. Falls back to the default when omitted.',
+    })
+    @IsOptional()
+    @IsString()
+    @MaxLength(600)
+    apologyNote?: string;
 }

@@ -1,13 +1,21 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { InjectQueue } from '@nestjs/bull';
-import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
+import {
+    BadRequestException,
+    HttpException,
+    HttpStatus,
+    Inject,
+    Injectable,
+} from '@nestjs/common';
 import axios from 'axios';
 import { Queue } from 'bull';
 import { Cache } from 'cache-manager';
 import { PinoLogger } from 'nestjs-pino';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { Role } from '@prisma/client';
+import { CryptoCurrency, Role } from '@prisma/client';
+
+import { isValidAddress } from 'src/modules/crypto-payment/utils/crypto.util';
 
 import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { DatabaseService } from 'src/common/database/services/database.service';
@@ -78,6 +86,21 @@ const LANDING_FIELD_TO_KEY: Record<
     featuresDesc: KEYS.landingFeaturesDesc,
     faqDesc: KEYS.landingFaqDesc,
 };
+
+// Default copy for the scheduled-maintenance email. Used whenever the admin
+// leaves a field blank, so the email always renders complete. Keep these in
+// sync with the prefilled defaults in the admin UI (settings-screen.tsx).
+const DEFAULT_MAINTENANCE_COPY = {
+    subject: 'Scheduled maintenance notice',
+    title: 'Scheduled Maintenance',
+    intro:
+        'Jinx.to Store will be temporarily unavailable while we perform scheduled maintenance.\n\n' +
+        "We're working on improvements to make your Jinx.to Store experience smoother, faster, and more reliable.",
+    impactNote:
+        'During this time, you may not be able to access your dashboard, place orders, use wallet features, or manage your account.',
+    apologyNote:
+        'We regret any inconvenience caused and appreciate your patience while we complete the maintenance.',
+} as const;
 
 @Injectable()
 export class SettingsService {
@@ -271,6 +294,17 @@ export class SettingsService {
         return value !== 'false';
     }
 
+    // Raw (unmasked) platform wallet address configured by admin for a crypto
+    // method code. Returns null when unset/empty so callers can fall back to env.
+    // Consumed by SystemWalletService when forwarding confirmed payments.
+    async getCryptoPlatformAddress(code: string): Promise<string | null> {
+        const row = await this.databaseService.systemSettings.findUnique({
+            where: { key: this.cryptoAddressKey(code) },
+            select: { value: true },
+        });
+        return this.normalizeNullable(row?.value ?? null);
+    }
+
     async getPayment(): Promise<SettingsPaymentResponseDto> {
         const rows = await this.databaseService.systemSettings.findMany({
             where: { category: PAYMENT_SETTINGS_CATEGORY },
@@ -312,10 +346,23 @@ export class SettingsService {
         for (const item of payload.cryptocurrencies ?? []) {
             if (!allowedCrypto.has(item.code)) continue;
             if (item.address !== undefined) {
+                const normalized = this.normalizeNullable(item.address);
+                // A non-empty address must be a valid wallet for its chain — a
+                // typo here would forward confirmed funds to an invalid/wrong
+                // destination. Clearing it (empty) is allowed; runtime falls
+                // back to the PLATFORM_WALLET_* env.
+                if (
+                    normalized &&
+                    !isValidAddress(normalized, item.code as CryptoCurrency)
+                ) {
+                    throw new BadRequestException(
+                        `Invalid ${item.code} wallet address`
+                    );
+                }
                 await this.upsertSetting(
                     this.cryptoAddressKey(item.code),
                     PAYMENT_SETTINGS_CATEGORY,
-                    this.normalizeNullable(item.address),
+                    normalized,
                     false
                 );
             }
@@ -521,10 +568,22 @@ export class SettingsService {
     public async broadcastMaintenanceNotice(
         payload: SettingsScheduleMaintenanceRequestDto
     ): Promise<ApiGenericResponseDto> {
+        // Admin-authored copy wins; blank fields fall back to the defaults so
+        // the email always renders complete.
+        const subject =
+            payload.subject?.trim() || DEFAULT_MAINTENANCE_COPY.subject;
         const data: IScheduledMaintenancePayload = {
             date: payload.date,
             start_time: payload.startTime,
             end_time: payload.endTime,
+            title: payload.title?.trim() || DEFAULT_MAINTENANCE_COPY.title,
+            intro: payload.intro?.trim() || DEFAULT_MAINTENANCE_COPY.intro,
+            impact_note:
+                payload.impactNote?.trim() ||
+                DEFAULT_MAINTENANCE_COPY.impactNote,
+            apology_note:
+                payload.apologyNote?.trim() ||
+                DEFAULT_MAINTENANCE_COPY.apologyNote,
         };
 
         const batchSize = 200;
@@ -544,14 +603,24 @@ export class SettingsService {
 
             if (batch.length === 0) break;
 
-            for (const recipient of batch) {
-                if (!recipient.email) continue;
-                this.emailQueue.add(EMAIL_TEMPLATES.SCHEDULED_MAINTENANCE, {
-                    data,
-                    toEmails: [recipient.email],
-                } as ISendEmailBasePayload<IScheduledMaintenancePayload>);
-                totalQueued++;
-            }
+            // Await the enqueue calls so a Redis/queue failure surfaces as a
+            // real error instead of being silently swallowed (which would let
+            // the admin see a false success while no emails are sent).
+            await Promise.all(
+                batch
+                    .filter(recipient => recipient.email)
+                    .map(recipient => {
+                        totalQueued++;
+                        return this.emailQueue.add(
+                            EMAIL_TEMPLATES.SCHEDULED_MAINTENANCE,
+                            {
+                                data,
+                                toEmails: [recipient.email],
+                                subject,
+                            } as ISendEmailBasePayload<IScheduledMaintenancePayload>
+                        );
+                    })
+            );
 
             cursor = batch[batch.length - 1].id;
             if (batch.length < batchSize) break;

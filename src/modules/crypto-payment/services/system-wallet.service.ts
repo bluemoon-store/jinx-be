@@ -4,6 +4,8 @@ import { PinoLogger } from 'nestjs-pino';
 import { CryptoCurrency, Prisma } from '@prisma/client';
 
 import { DatabaseService } from 'src/common/database/services/database.service';
+import { SettingsService } from 'src/modules/settings/services/settings.service';
+import { PAYMENT_CRYPTO_CODES } from 'src/modules/settings/constants/payment-settings.constant';
 import { ISystemWalletService } from '../interfaces/system-wallet.service.interface';
 import {
     deriveAddress,
@@ -20,6 +22,7 @@ export class SystemWalletService implements ISystemWalletService {
     constructor(
         private readonly databaseService: DatabaseService,
         private readonly configService: ConfigService,
+        private readonly settingsService: SettingsService,
         private readonly logger: PinoLogger
     ) {
         this.logger.setContext(SystemWalletService.name);
@@ -325,7 +328,22 @@ export class SystemWalletService implements ISystemWalletService {
      * @param cryptocurrency - Cryptocurrency type
      * @returns Platform wallet address
      */
-    getPlatformWalletAddress(cryptocurrency: CryptoCurrency): string {
+    async getPlatformWalletAddress(
+        cryptocurrency: CryptoCurrency
+    ): Promise<string> {
+        // 1. Prefer the admin-configured address (DB). Only the methods exposed
+        // in the admin Payment settings are configurable; others fall through.
+        if (
+            (PAYMENT_CRYPTO_CODES as readonly string[]).includes(cryptocurrency)
+        ) {
+            const dbAddress =
+                await this.settingsService.getCryptoPlatformAddress(
+                    cryptocurrency
+                );
+            if (dbAddress) return dbAddress;
+        }
+
+        // 2. Fall back to the PLATFORM_WALLET_* env (keyed by chain).
         const keyMap: Record<CryptoCurrency, string> = {
             BTC: 'btc',
             ETH: 'eth',
@@ -344,7 +362,7 @@ export class SystemWalletService implements ISystemWalletService {
 
         if (!address) {
             throw new BadRequestException(
-                `Platform wallet address not configured for ${cryptocurrency}. Please set PLATFORM_WALLET_${cryptocurrency} environment variable.`
+                `Platform wallet address not configured for ${cryptocurrency}. Set it in Admin → Settings → Payment, or the PLATFORM_WALLET_* environment variable.`
             );
         }
 

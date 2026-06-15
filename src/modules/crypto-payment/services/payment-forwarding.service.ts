@@ -92,7 +92,7 @@ export class PaymentForwardingService implements IPaymentForwardingService {
             );
 
             const platformWalletAddress =
-                this.systemWalletService.getPlatformWalletAddress(
+                await this.systemWalletService.getPlatformWalletAddress(
                     payment.cryptocurrency
                 );
 

@@ -25,6 +25,22 @@ export class StoreSettingsSeedService {
         this.logger.info('Store settings seeding finished');
     }
 
+    // Maps an admin crypto method code to the chain-keyed PLATFORM_WALLET_* env
+    // var so existing env-configured addresses surface in admin and drive the
+    // live forwarding flow (which now reads DB-first, env as fallback).
+    private platformWalletEnv(code: string): string {
+        const envByCode: Record<string, string | undefined> = {
+            btc: process.env.PLATFORM_WALLET_BTC,
+            eth: process.env.PLATFORM_WALLET_ETH,
+            sol: process.env.PLATFORM_WALLET_SOL,
+            usdt_trc20: process.env.PLATFORM_WALLET_TRX,
+            usdt_erc20: process.env.PLATFORM_WALLET_ETH,
+            ltc: process.env.PLATFORM_WALLET_LTC,
+            bch: process.env.PLATFORM_WALLET_BCH,
+        };
+        return (envByCode[code] ?? '').trim();
+    }
+
     private async seedSystemSettings(): Promise<void> {
         const paymentCryptoCodes = [
             'btc',
@@ -42,7 +58,7 @@ export class StoreSettingsSeedService {
                 {
                     key: `payment_crypto_${code}_address`,
                     category: 'payment',
-                    value: '',
+                    value: this.platformWalletEnv(code),
                     isPublic: false,
                 },
                 {
@@ -102,6 +118,27 @@ export class StoreSettingsSeedService {
                 update: { category: row.category, isPublic: row.isPublic },
                 create: row,
             });
+        }
+
+        // Backfill platform wallet addresses from PLATFORM_WALLET_* env for rows
+        // that already exist but are still empty (the upsert above never touches
+        // `value`, so admin-set addresses are preserved). This is what makes the
+        // env-configured addresses visible in admin on existing deployments.
+        for (const code of paymentCryptoCodes) {
+            const envValue = this.platformWalletEnv(code);
+            if (!envValue) continue;
+            const key = `payment_crypto_${code}_address`;
+            const existing =
+                await this.databaseService.systemSettings.findUnique({
+                    where: { key },
+                    select: { value: true },
+                });
+            if (existing && existing.value.trim().length === 0) {
+                await this.databaseService.systemSettings.update({
+                    where: { key },
+                    data: { value: envValue },
+                });
+            }
         }
     }
 

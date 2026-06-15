@@ -6,6 +6,7 @@ import { APP_BULL_QUEUES } from 'src/app/enums/app.enum';
 import { EMAIL_TEMPLATES } from 'src/common/email/enums/email-template.enum';
 import {
     IAccountBannedPayload,
+    IAccountCreatedWithPasswordPayload,
     IAdminLoginOtpPayload,
     IAdminPasswordChangedPayload,
     IForgotPasswordOtpPayload,
@@ -41,7 +42,7 @@ export class EmailProcessorWorker {
         emailType: EMAIL_TEMPLATES,
         label: string
     ) {
-        const { toEmails, data } = job.data;
+        const { toEmails, data, subject } = job.data;
 
         this.logger.info(
             { jobId: job.id, recipients: toEmails.length, emailType },
@@ -53,6 +54,7 @@ export class EmailProcessorWorker {
                 emails: toEmails,
                 emailType,
                 payload: data,
+                subject,
             });
 
             this.logger.info(
@@ -116,6 +118,17 @@ export class EmailProcessorWorker {
             job,
             EMAIL_TEMPLATES.WELCOME_TO_JINX_MANAGEMENT,
             'welcome-to-jinx-management'
+        );
+    }
+
+    @Process(EMAIL_TEMPLATES.ACCOUNT_CREATED_WITH_PASSWORD)
+    async processAccountCreatedWithPassword(
+        job: Job<ISendEmailBasePayload<IAccountCreatedWithPasswordPayload>>
+    ) {
+        await this.dispatch(
+            job,
+            EMAIL_TEMPLATES.ACCOUNT_CREATED_WITH_PASSWORD,
+            'account-created-with-password'
         );
     }
 

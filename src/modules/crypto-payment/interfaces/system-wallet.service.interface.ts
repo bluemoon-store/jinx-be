@@ -48,5 +48,5 @@ export interface ISystemWalletService {
      * @param cryptocurrency - Cryptocurrency type
      * @returns Platform wallet address
      */
-    getPlatformWalletAddress(cryptocurrency: CryptoCurrency): string;
+    getPlatformWalletAddress(cryptocurrency: CryptoCurrency): Promise<string>;
 }

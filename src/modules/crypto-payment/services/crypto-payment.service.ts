@@ -290,7 +290,9 @@ export class CryptoPaymentService implements ICryptoPaymentService {
             );
 
         const platformWalletAddress =
-            this.systemWalletService.getPlatformWalletAddress(cryptocurrency);
+            await this.systemWalletService.getPlatformWalletAddress(
+                cryptocurrency
+            );
         if (!platformWalletAddress) {
             throw new BadRequestException(
                 `Platform wallet address not configured for ${cryptocurrency}`
