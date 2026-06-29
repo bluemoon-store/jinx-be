@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { FiatPaymentStatus, PaymentGateway } from '@prisma/client';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { FiatPaymentStatus, P2PProvider, PaymentGateway } from '@prisma/client';
 import { Expose } from 'class-transformer';
 
 export class FiatPaymentResponseDto {
@@ -24,10 +24,32 @@ export class FiatPaymentResponseDto {
     currency: string;
 
     @ApiProperty({
-        description: 'Hosted checkout URL to redirect the buyer to',
+        description:
+            'Hosted checkout URL to redirect the buyer to (hosted gateways only; ' +
+            'empty for MANUAL_P2P — use the instruction fields instead)',
     })
     @Expose()
     checkoutUrl: string;
+
+    @ApiPropertyOptional({
+        description: 'MANUAL_P2P only: which P2P rail (Chime / Venmo)',
+        enum: P2PProvider,
+    })
+    @Expose()
+    provider?: P2PProvider;
+
+    @ApiPropertyOptional({
+        description: 'MANUAL_P2P only: destination $tag / @handle to pay',
+    })
+    @Expose()
+    destinationTag?: string;
+
+    @ApiPropertyOptional({
+        description:
+            'MANUAL_P2P only: exact note the buyer must include in the payment',
+    })
+    @Expose()
+    requiredNote?: string;
 
     @ApiProperty({ description: 'Payment status', enum: FiatPaymentStatus })
     @Expose()

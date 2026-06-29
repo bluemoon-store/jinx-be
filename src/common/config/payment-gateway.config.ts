@@ -42,6 +42,49 @@ export default registerAs(
             ),
         },
 
+        // Manual P2P (Chime/Venmo) — self-hosted "pay to a $tag/@handle" flow
+        // reconciled from notification emails. No API credentials: the tag/handle
+        // per provider lives in admin settings (SystemSettings). Only the local
+        // checkout expiry window is configured here. Manual transfers take longer
+        // than a hosted redirect, so the default window is wider than CHIME's.
+        manualP2P: {
+            paymentExpiryMinutes: parseInt(
+                process.env.MANUAL_P2P_PAYMENT_EXPIRY_MIN || '60',
+                10
+            ),
+        },
+
+        // Email reconciliation for MANUAL_P2P. Since Chime/Venmo expose no
+        // payments API, the receiving mailbox's "you got paid" notification
+        // emails are the only payment signal. We poll Gmail (decided: polling,
+        // not Pub/Sub) for messages from the providers and match them to pending
+        // payments by required note + exact amount. Auth is a Google OAuth2
+        // refresh token for the mailbox that receives the notifications.
+        manualP2PEmail: {
+            // Master switch — when false the poller is a no-op (safe default).
+            enabled: process.env.P2P_EMAIL_RECONCILE_ENABLED === 'true',
+            google: {
+                clientId: process.env.GMAIL_OAUTH_CLIENT_ID || '',
+                clientSecret: process.env.GMAIL_OAUTH_CLIENT_SECRET || '',
+                // Refresh token for the notification mailbox (scope:
+                // gmail.readonly). The mailbox is addressed as "me".
+                refreshToken: process.env.GMAIL_OAUTH_REFRESH_TOKEN || '',
+            },
+            // How far back each poll looks. Dedup is by Gmail message id, so a
+            // wide window is safe (already-seen messages are skipped).
+            pollLookbackHours: parseInt(
+                process.env.P2P_EMAIL_LOOKBACK_HOURS || '48',
+                10
+            ),
+            maxMessagesPerPoll: parseInt(
+                process.env.P2P_EMAIL_MAX_PER_POLL || '25',
+                10
+            ),
+            // Trusted sender domains (From + DKIM/SPF must match one of these).
+            venmoFromDomain: process.env.VENMO_FROM_DOMAIN || 'venmo.com',
+            chimeFromDomain: process.env.CHIME_FROM_DOMAIN || 'chime.com',
+        },
+
         // Telegram Stars (XTR) via the Bot Payments API. Unlike CHIME there is
         // no hosted checkout host/credentials — we call the Bot API directly
         // with the bot token and confirm via the bot webhook (no status poll).

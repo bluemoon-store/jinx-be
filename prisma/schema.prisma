@@ -579,6 +579,16 @@ model FiatPayment {
   externalReference String? @map("external_reference") // order_reference we send to the gateway
   checkoutUrl       String? @map("checkout_url") @db.Text // Hosted payment page URL
 
+  // Manual P2P (MANUAL_P2P gateway): buyer-facing instructions + email-match keys.
+  // Null for hosted gateways (CHIME/Polapine, TELEGRAM_STARS).
+  provider       P2PProvider? // Which P2P rail (Chime / Venmo)
+  destinationTag String?      @map("destination_tag") // Chime $tag / Venmo @handle shown to buyer
+  requiredNote   String?      @map("required_note") // Display note, e.g. "column notice robust master"
+  noteKey        String?      @unique @map("note_key") // Normalized note for email matching ("columnnoticerobustmaster")
+
+  // Inbound notification emails matched to this payment
+  inboundEmails InboundPaymentEmail[]
+
   // Payment status
   status FiatPaymentStatus @default(PENDING)
 
@@ -598,9 +608,58 @@ model FiatPayment {
   @@map("fiat_payments")
 }
 
+// Parsed Chime/Venmo "you received money" emails. Each row is one notification.
+// Used to auto-reconcile MANUAL_P2P payments and as an audit/idempotency log.
+model InboundPaymentEmail {
+  id String @id @default(uuid())
+
+  provider P2PProvider
+
+  // Parsed fields from the notification email
+  amount       Decimal @db.Decimal(20, 2)
+  note         String? // Raw note as it appeared in the email
+  noteKey      String? @map("note_key") // Normalized note for matching
+  payerName    String? @map("payer_name")
+  externalTxId String? @unique @map("external_tx_id") // Provider transaction id (idempotency)
+  sentToHandle String? @map("sent_to_handle") // The $tag/@handle the money was sent to
+
+  // Source email identity (primary idempotency key — every Gmail message id is unique)
+  gmailMessageId String   @unique @map("gmail_message_id")
+  receivedAt     DateTime @map("received_at")
+
+  // Reconciliation result
+  status        InboundPaymentStatus @default(UNMATCHED)
+  fiatPaymentId String?              @map("fiat_payment_id")
+  fiatPayment   FiatPayment?         @relation(fields: [fiatPaymentId], references: [id])
+
+  raw       Json? // Full parsed payload / headers for audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([noteKey])
+  @@index([provider])
+  @@index([fiatPaymentId])
+  @@map("inbound_payment_emails")
+}
+
 enum PaymentGateway {
   CHIME
   TELEGRAM_STARS // Telegram Stars (XTR) via the Bot Payments API
+  MANUAL_P2P // Self-hosted Chime/Venmo P2P, reconciled from notification emails
+}
+
+// Provider behind a MANUAL_P2P payment
+enum P2PProvider {
+  CHIME
+  VENMO
+}
+
+// Lifecycle of a parsed inbound payment-notification email
+enum InboundPaymentStatus {
+  UNMATCHED // Parsed but not yet tied to a payment (needs review)
+  MATCHED // Tied to a FiatPayment and credited
+  IGNORED // Admin dismissed (spam, duplicate, unrelated)
 }
 
 enum FiatPaymentStatus {

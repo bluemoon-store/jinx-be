@@ -4,6 +4,7 @@ import { PaymentGateway } from '@prisma/client';
 
 import { IPaymentGateway } from '../interfaces/payment-gateway.interface';
 import { ChimeGateway } from './chime-gateway.service';
+import { ManualP2PGateway } from './manual-p2p-gateway.service';
 import { TelegramStarsGateway } from './telegram-stars-gateway.service';
 
 /**
@@ -18,7 +19,8 @@ export class PaymentGatewayFactory {
     constructor(
         private readonly logger: PinoLogger,
         private readonly chimeGateway: ChimeGateway,
-        private readonly telegramStarsGateway: TelegramStarsGateway
+        private readonly telegramStarsGateway: TelegramStarsGateway,
+        private readonly manualP2PGateway: ManualP2PGateway
     ) {
         this.logger.setContext(PaymentGatewayFactory.name);
         this.gateways = new Map();
@@ -27,6 +29,7 @@ export class PaymentGatewayFactory {
             PaymentGateway.TELEGRAM_STARS,
             this.telegramStarsGateway
         );
+        this.gateways.set(PaymentGateway.MANUAL_P2P, this.manualP2PGateway);
 
         this.logger.info(
             { supportedGateways: Array.from(this.gateways.keys()) },

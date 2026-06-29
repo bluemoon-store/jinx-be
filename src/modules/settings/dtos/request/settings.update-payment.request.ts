@@ -53,6 +53,17 @@ export class SettingsUpdatePaymentGatewayRequestDto {
     @MaxLength(512)
     apiSecret?: string | null;
 
+    @ApiPropertyOptional({
+        maxLength: 128,
+        nullable: true,
+        description:
+            'Destination $tag / @handle for P2P rails (CHIME_P2P, VENMO).',
+    })
+    @IsOptional()
+    @IsString()
+    @MaxLength(128)
+    tag?: string | null;
+
     @ApiPropertyOptional()
     @IsOptional()
     @IsBoolean()

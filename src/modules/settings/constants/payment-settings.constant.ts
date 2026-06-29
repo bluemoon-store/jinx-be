@@ -17,7 +17,21 @@ export const PAYMENT_GATEWAY_CODES = [
     'APPLEPAY',
     'GOOGLEPAY',
     'TELEGRAM_STARS',
+    'CHIME_P2P',
+    'VENMO',
 ] as const;
+
+// Subset of gateway codes that are self-hosted, email-reconciled P2P rails
+// (MANUAL_P2P gateway). These store a destination $tag/@handle instead of
+// API key/secret. Maps the admin code -> the Prisma P2PProvider value.
+export const PAYMENT_P2P_GATEWAY_PROVIDER: Record<string, 'CHIME' | 'VENMO'> = {
+    CHIME_P2P: 'CHIME',
+    VENMO: 'VENMO',
+};
+
+export const PAYMENT_P2P_GATEWAY_CODES = Object.keys(
+    PAYMENT_P2P_GATEWAY_PROVIDER
+) as ReadonlyArray<keyof typeof PAYMENT_P2P_GATEWAY_PROVIDER>;
 
 export type PaymentCryptoCode = (typeof PAYMENT_CRYPTO_CODES)[number];
 export type PaymentGatewayCode = (typeof PAYMENT_GATEWAY_CODES)[number];

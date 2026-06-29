@@ -13,6 +13,7 @@ import { StockLineModule } from 'src/modules/stock-line/stock-line.module';
 
 import { FIAT_PAYMENT_QUEUE } from './fiat-payment.constants';
 import { ChimeGateway } from './gateways/chime-gateway.service';
+import { ManualP2PGateway } from './gateways/manual-p2p-gateway.service';
 import { TelegramStarsGateway } from './gateways/telegram-stars-gateway.service';
 import { PaymentGatewayFactory } from './gateways/payment-gateway.factory';
 import { FiatPaymentService } from './services/fiat-payment.service';
@@ -44,6 +45,7 @@ import { TelegramWebhookController } from './controllers/telegram-webhook.contro
         PaymentGatewayFactory,
         ChimeGateway,
         TelegramStarsGateway,
+        ManualP2PGateway,
         // Processor + cron scheduler — worker container only
         ...workerOnlyProviders([FiatPaymentProcessor, FiatPaymentScheduler]),
     ],

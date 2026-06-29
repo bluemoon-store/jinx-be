@@ -13,6 +13,7 @@ import {
     FiatPayment,
     FiatPaymentStatus,
     OrderStatus,
+    P2PProvider,
     PaymentGateway,
     Prisma,
 } from '@prisma/client';
@@ -93,7 +94,13 @@ export class FiatPaymentService {
         gateway: PaymentGateway,
         userId: string,
         returnUrl?: string,
-        method?: 'card' | 'cashapp' | 'applepay' | 'googlepay'
+        method?:
+            | 'card'
+            | 'cashapp'
+            | 'applepay'
+            | 'googlepay'
+            | 'chime'
+            | 'venmo'
     ): Promise<FiatPaymentResponseDto> {
         this.logger.info(
             { orderId, gateway, method, userId },
@@ -117,6 +124,15 @@ export class FiatPaymentService {
             // (card -> CHIME, cashapp -> CASHAPP, applepay -> APPLEPAY,
             // googlepay -> GOOGLEPAY). Telegram Stars is its own gateway and
             // maps to its own toggle.
+            // MANUAL_P2P (self-hosted Chime/Venmo) selects its rail via `method`
+            // and maps to its own admin toggle (chime -> CHIME_P2P, venmo -> VENMO).
+            const isManualP2P = gateway === PaymentGateway.MANUAL_P2P;
+            const p2pProvider: P2PProvider | undefined = isManualP2P
+                ? method === 'venmo'
+                    ? P2PProvider.VENMO
+                    : P2PProvider.CHIME
+                : undefined;
+
             const methodToCode: Record<string, string> = {
                 cashapp: 'CASHAPP',
                 applepay: 'APPLEPAY',
@@ -125,7 +141,11 @@ export class FiatPaymentService {
             const gatewayCode =
                 gateway === PaymentGateway.TELEGRAM_STARS
                     ? 'TELEGRAM_STARS'
-                    : ((method && methodToCode[method]) ?? 'CHIME');
+                    : isManualP2P
+                      ? p2pProvider === P2PProvider.VENMO
+                          ? 'VENMO'
+                          : 'CHIME_P2P'
+                      : ((method && methodToCode[method]) ?? 'CHIME');
             const { gateways: enabledGateways } =
                 await this.settingsService.getEnabledPaymentMethods();
             if (!enabledGateways.includes(gatewayCode)) {
@@ -143,17 +163,27 @@ export class FiatPaymentService {
             const now = new Date();
             const existing = order.fiatPayment;
 
-            // Reuse an active checkout rather than creating a duplicate.
+            // Reuse an active checkout rather than creating a duplicate. A
+            // hosted gateway has a checkoutUrl; a MANUAL_P2P payment has a
+            // requiredNote instead. Only reuse when the buyer is still on the
+            // same rail (gateway + P2P provider) — switching method falls
+            // through and overwrites the record below.
             if (existing) {
                 if (existing.status === FiatPaymentStatus.PAID) {
                     throw new BadRequestException(
                         'Order has already been paid'
                     );
                 }
+                const sameTarget =
+                    existing.gateway === gateway &&
+                    (!isManualP2P || existing.provider === p2pProvider);
+                const hasArtifact =
+                    !!existing.checkoutUrl || !!existing.requiredNote;
                 const active =
                     ACTIVE_STATUSES.includes(existing.status) &&
                     now < existing.expiresAt &&
-                    !!existing.checkoutUrl;
+                    hasArtifact &&
+                    sameTarget;
                 if (active) {
                     return this.mapToResponseDto(existing);
                 }
@@ -167,12 +197,14 @@ export class FiatPaymentService {
             }
 
             const isTelegram = gateway === PaymentGateway.TELEGRAM_STARS;
+            const expiryConfigPath = isTelegram
+                ? 'paymentGateway.telegramStars.paymentExpiryMinutes'
+                : isManualP2P
+                  ? 'paymentGateway.manualP2P.paymentExpiryMinutes'
+                  : 'paymentGateway.chime.paymentExpiryMinutes';
             const expiryMinutes =
-                this.configService.get<number>(
-                    isTelegram
-                        ? 'paymentGateway.telegramStars.paymentExpiryMinutes'
-                        : 'paymentGateway.chime.paymentExpiryMinutes'
-                ) ?? 30;
+                this.configService.get<number>(expiryConfigPath) ??
+                (isManualP2P ? 60 : 30);
             const expiresAt = new Date(now.getTime() + expiryMinutes * 60_000);
 
             // Telegram charges an integer Stars (XTR) amount — resolve it from the
@@ -189,39 +221,93 @@ export class FiatPaymentService {
                 starAmount = Math.max(1, Math.ceil(amountUsd / rate));
             }
 
-            const provider = this.gatewayFactory.getGateway(gateway);
-            const checkout = await provider.createCheckout({
-                orderId: order.id,
-                orderNumber: order.orderNumber,
-                amount: amountUsd,
-                currency: order.currency,
-                returnUrl,
-                expiresAt,
-                starAmount,
-            });
+            // MANUAL_P2P: resolve the destination $tag/@handle the buyer pays to.
+            // Reject early when the admin has not configured it.
+            let destinationTag: string | undefined;
+            if (isManualP2P && p2pProvider) {
+                const tag =
+                    await this.settingsService.getP2PDestinationTag(
+                        p2pProvider
+                    );
+                if (!tag) {
+                    throw new BadRequestException(
+                        'This payment method is not configured yet. Please choose another.'
+                    );
+                }
+                destinationTag = tag;
+            }
 
-            const effectiveExpiry = checkout.expiresAt ?? expiresAt;
-            const data = {
-                gateway,
-                amount: new Prisma.Decimal(amountUsd.toFixed(2)),
-                currency: order.currency,
-                externalId: checkout.externalId,
-                externalReference: checkout.externalReference,
-                checkoutUrl: checkout.checkoutUrl,
-                status: FiatPaymentStatus.PENDING,
-                expiresAt: effectiveExpiry,
-                paidAt: null,
-                metadata: (checkout.raw ?? undefined) as Prisma.InputJsonValue,
-            };
+            const gatewayImpl = this.gatewayFactory.getGateway(gateway);
 
-            const payment = existing
-                ? await this.databaseService.fiatPayment.update({
-                      where: { id: existing.id },
-                      data,
-                  })
-                : await this.databaseService.fiatPayment.create({
-                      data: { orderId: order.id, ...data },
-                  });
+            // The MANUAL_P2P required note is unique per active payment
+            // (FiatPayment.noteKey is unique). On the rare collision, regenerate
+            // by retrying the whole create-checkout + persist.
+            const maxAttempts = isManualP2P ? 3 : 1;
+            let payment: FiatPayment | undefined;
+            let lastError: unknown;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                const checkout = await gatewayImpl.createCheckout({
+                    orderId: order.id,
+                    orderNumber: order.orderNumber,
+                    amount: amountUsd,
+                    currency: order.currency,
+                    returnUrl,
+                    expiresAt,
+                    starAmount,
+                    provider: p2pProvider,
+                    destinationTag,
+                });
+
+                const effectiveExpiry = checkout.expiresAt ?? expiresAt;
+                const data = {
+                    gateway,
+                    amount: new Prisma.Decimal(amountUsd.toFixed(2)),
+                    currency: order.currency,
+                    externalId: checkout.externalId,
+                    externalReference: checkout.externalReference,
+                    checkoutUrl: checkout.checkoutUrl ?? null,
+                    // MANUAL_P2P instruction fields (null for hosted gateways).
+                    provider: checkout.instructions?.provider ?? null,
+                    destinationTag: checkout.instructions?.tag ?? null,
+                    requiredNote: checkout.instructions?.note ?? null,
+                    noteKey: checkout.instructions?.noteKey ?? null,
+                    status: FiatPaymentStatus.PENDING,
+                    expiresAt: effectiveExpiry,
+                    paidAt: null,
+                    metadata: (checkout.raw ??
+                        undefined) as Prisma.InputJsonValue,
+                };
+
+                try {
+                    payment = existing
+                        ? await this.databaseService.fiatPayment.update({
+                              where: { id: existing.id },
+                              data,
+                          })
+                        : await this.databaseService.fiatPayment.create({
+                              data: { orderId: order.id, ...data },
+                          });
+                    break;
+                } catch (err) {
+                    // Unique violation on note_key -> regenerate and retry.
+                    if (
+                        err instanceof Prisma.PrismaClientKnownRequestError &&
+                        err.code === 'P2002' &&
+                        attempt < maxAttempts - 1
+                    ) {
+                        lastError = err;
+                        continue;
+                    }
+                    throw err;
+                }
+            }
+            if (!payment) {
+                throw (
+                    lastError ??
+                    new Error('Failed to persist fiat payment after retries')
+                );
+            }
+            const effectiveExpiry = payment.expiresAt;
 
             await this.stockLineService.syncReservationExpiryForOrder(
                 this.databaseService,
@@ -642,6 +728,9 @@ export class FiatPaymentService {
             amount: payment.amount.toString(),
             currency: payment.currency,
             checkoutUrl: payment.checkoutUrl ?? '',
+            provider: payment.provider ?? undefined,
+            destinationTag: payment.destinationTag ?? undefined,
+            requiredNote: payment.requiredNote ?? undefined,
             status: payment.status,
             expiresAt: payment.expiresAt,
             timeRemaining: this.timeRemaining(payment.expiresAt),

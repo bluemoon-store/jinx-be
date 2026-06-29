@@ -28,6 +28,13 @@ export class SettingsPaymentGatewayResponseDto {
     @Expose()
     apiSecret: string | null;
 
+    @ApiPropertyOptional({
+        nullable: true,
+        description: 'Destination $tag / @handle for P2P rails (Chime/Venmo).',
+    })
+    @Expose()
+    tag: string | null;
+
     @ApiProperty()
     @Expose()
     enabled: boolean;

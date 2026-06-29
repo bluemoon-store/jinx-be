@@ -57,6 +57,9 @@ export class StoreSettingsSeedService {
             'applepay',
             'googlepay',
         ];
+        // Self-hosted, email-reconciled P2P rails (MANUAL_P2P gateway). These
+        // store a destination $tag/@handle instead of API key/secret.
+        const paymentP2PGatewayCodes = ['chime_p2p', 'venmo'];
 
         const paymentRows = [
             ...paymentCryptoCodes.flatMap(code => [
@@ -82,6 +85,20 @@ export class StoreSettingsSeedService {
                 },
                 {
                     key: `payment_gateway_${code}_api_secret`,
+                    category: 'payment',
+                    value: '',
+                    isPublic: false,
+                },
+                {
+                    key: `payment_gateway_${code}_enabled`,
+                    category: 'payment',
+                    value: 'true',
+                    isPublic: false,
+                },
+            ]),
+            ...paymentP2PGatewayCodes.flatMap(code => [
+                {
+                    key: `payment_gateway_${code}_tag`,
                     category: 'payment',
                     value: '',
                     isPublic: false,

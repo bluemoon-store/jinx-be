@@ -13,7 +13,7 @@ import { Cache } from 'cache-manager';
 import { PinoLogger } from 'nestjs-pino';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { CryptoCurrency, Role } from '@prisma/client';
+import { CryptoCurrency, P2PProvider, Role } from '@prisma/client';
 
 import { isValidAddress } from 'src/modules/crypto-payment/utils/crypto.util';
 
@@ -35,6 +35,7 @@ import {
 import {
     PAYMENT_CRYPTO_CODES,
     PAYMENT_GATEWAY_CODES,
+    PAYMENT_P2P_GATEWAY_PROVIDER,
     PAYMENT_SETTINGS_CATEGORY,
     PAYMENT_TELEGRAM_STAR_USD_RATE_KEY,
 } from '../constants/payment-settings.constant';
@@ -415,6 +416,12 @@ export class SettingsService {
         return `payment_gateway_${code.toLowerCase()}_enabled`;
     }
 
+    // Destination $tag / @handle for a self-hosted P2P rail (MANUAL_P2P). Stored
+    // per gateway code, e.g. `payment_gateway_chime_p2p_tag`.
+    private gatewayTagKey(code: string): string {
+        return `payment_gateway_${code.toLowerCase()}_tag`;
+    }
+
     // Missing key defaults to enabled so methods stay visible until toggled off.
     private parseEnabled(value: string | undefined): boolean {
         if (value == null) return true;
@@ -456,6 +463,10 @@ export class SettingsService {
                 ),
                 apiSecret: this.toPublicNullable(
                     byKey.get(this.gatewayApiSecretKey(code)) ?? null
+                ),
+                // Only meaningful for P2P rails (Chime/Venmo); null otherwise.
+                tag: this.toPublicNullable(
+                    byKey.get(this.gatewayTagKey(code)) ?? null
                 ),
                 enabled: this.parseEnabled(
                     byKey.get(this.gatewayEnabledKey(code))
@@ -524,6 +535,15 @@ export class SettingsService {
                     false
                 );
             }
+            // Destination $tag / @handle for P2P rails (Chime/Venmo).
+            if (item.tag !== undefined) {
+                await this.upsertSetting(
+                    this.gatewayTagKey(item.code),
+                    PAYMENT_SETTINGS_CATEGORY,
+                    this.normalizeNullable(item.tag),
+                    false
+                );
+            }
             if (item.enabled !== undefined) {
                 await this.upsertSetting(
                     this.gatewayEnabledKey(item.code),
@@ -549,6 +569,22 @@ export class SettingsService {
         await this.cacheManager.del(PAYMENT_METHODS_CACHE_KEY);
 
         return this.getPayment();
+    }
+
+    // Destination $tag / @handle a buyer must send a MANUAL_P2P payment to, for
+    // a given P2P provider. Resolved from the admin settings code that maps to
+    // the provider (CHIME -> CHIME_P2P, VENMO -> VENMO). Returns null when unset
+    // so the caller can reject the method as "not configured".
+    async getP2PDestinationTag(provider: P2PProvider): Promise<string | null> {
+        const code = Object.keys(PAYMENT_P2P_GATEWAY_PROVIDER).find(
+            key => PAYMENT_P2P_GATEWAY_PROVIDER[key] === provider
+        );
+        if (!code) return null;
+        const row = await this.databaseService.systemSettings.findUnique({
+            where: { key: this.gatewayTagKey(code) },
+            select: { value: true },
+        });
+        return this.normalizeNullable(row?.value ?? null);
     }
 
     // Admin-set USD price of one Telegram Star, or null when unset/invalid so

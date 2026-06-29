@@ -24,6 +24,7 @@ import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
 import { HealthController } from './controllers/health.controller';
 import { CryptoPaymentModule } from 'src/modules/crypto-payment/crypto-payment.module';
 import { FiatPaymentModule } from 'src/modules/fiat-payment/fiat-payment.module';
+import { EmailReconciliationModule } from 'src/modules/email-reconciliation/email-reconciliation.module';
 @Module({
     imports: [
         // Shared Common Services
@@ -46,6 +47,7 @@ import { FiatPaymentModule } from 'src/modules/fiat-payment/fiat-payment.module'
         TicketModule,
         CryptoPaymentModule,
         FiatPaymentModule,
+        EmailReconciliationModule,
         ReviewModule,
         VouchModule,
         CouponModule,
