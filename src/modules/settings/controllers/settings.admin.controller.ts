@@ -10,10 +10,12 @@ import { AuditLog } from 'src/modules/activity-log/decorators/audit-log.decorato
 
 import { SettingsScheduleMaintenanceRequestDto } from '../dtos/request/settings.schedule-maintenance.request';
 import { SettingsTestEmailValidityRequestDto } from '../dtos/request/settings.test-email-validity.request';
+import { SettingsUpdateBuyerProtectionRequestDto } from '../dtos/request/settings.update-buyer-protection.request';
 import { SettingsUpdateGeneralRequestDto } from '../dtos/request/settings.update-general.request';
 import { SettingsUpdateLandingRequestDto } from '../dtos/request/settings.update-landing.request';
 import { SettingsUpdatePaymentRequestDto } from '../dtos/request/settings.update-payment.request';
 import { SettingsUpdateSocialRequestDto } from '../dtos/request/settings.update-social.request';
+import { SettingsBuyerProtectionResponseDto } from '../dtos/response/settings.buyer-protection.response';
 import { SettingsEmailValidityTestResponseDto } from '../dtos/response/settings.email-validity-test.response';
 import { SettingsGeneralResponseDto } from '../dtos/response/settings.general.response';
 import { SettingsLandingResponseDto } from '../dtos/response/settings.landing.response';
@@ -156,6 +158,39 @@ export class SettingsAdminController {
         @Body() payload: SettingsUpdatePaymentRequestDto
     ): Promise<SettingsPaymentResponseDto> {
         return this.settingsService.updatePayment(payload);
+    }
+
+    @Get('buyer-protection')
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
+    @ApiBearerAuth('accessToken')
+    @ApiOperation({ summary: 'Get admin buyer-protection settings' })
+    @DocResponse({
+        serialization: SettingsBuyerProtectionResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'settings.success.buyerProtectionFound',
+    })
+    async getBuyerProtection(): Promise<SettingsBuyerProtectionResponseDto> {
+        return this.settingsService.getBuyerProtection();
+    }
+
+    @Put('buyer-protection')
+    @AuditLog({
+        action: 'settings.buyer-protection.update',
+        category: ActivityLogCategory.SETTINGS,
+        resourceType: 'SystemSettings',
+    })
+    @AllowedRoles(SETTINGS_ACCESS_ROLES)
+    @ApiBearerAuth('accessToken')
+    @ApiOperation({ summary: 'Update admin buyer-protection settings' })
+    @DocResponse({
+        serialization: SettingsBuyerProtectionResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'settings.success.buyerProtectionUpdated',
+    })
+    async updateBuyerProtection(
+        @Body() payload: SettingsUpdateBuyerProtectionRequestDto
+    ): Promise<SettingsBuyerProtectionResponseDto> {
+        return this.settingsService.updateBuyerProtection(payload);
     }
 
     @Post('test-email-validity')

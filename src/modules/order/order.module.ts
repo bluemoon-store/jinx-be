@@ -12,6 +12,9 @@ import { CouponModule } from 'src/modules/coupon/coupon.module';
 import { ActivityLogModule } from 'src/modules/activity-log/activity-log.module';
 import { StockLineModule } from 'src/modules/stock-line/stock-line.module';
 import { TicketModule } from 'src/modules/ticket/ticket.module';
+import { SettingsModule } from 'src/modules/settings/settings.module';
+
+import { FIAT_PAYMENT_QUEUE } from 'src/modules/fiat-payment/fiat-payment.constants';
 
 import { OrderPublicController } from './controllers/order.public.controller';
 import { OrderAdminController } from './controllers/order.admin.controller';
@@ -30,8 +33,14 @@ import { OrderDeliveryService } from './services/order-delivery.service';
         ActivityLogModule,
         StockLineModule,
         TicketModule,
+        SettingsModule,
         BullModule.registerQueue({
             name: APP_BULL_QUEUES.EMAIL,
+        }),
+        // Shared with FiatPaymentModule; used to enqueue Telegram Stars refunds
+        // (the FiatPaymentProcessor handles 'refund-telegram' on the worker).
+        BullModule.registerQueue({
+            name: FIAT_PAYMENT_QUEUE,
         }),
     ],
     controllers: [OrderPublicController, OrderAdminController],

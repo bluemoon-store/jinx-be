@@ -600,6 +600,7 @@ model FiatPayment {
 
 enum PaymentGateway {
   CHIME
+  TELEGRAM_STARS // Telegram Stars (XTR) via the Bot Payments API
 }
 
 enum FiatPaymentStatus {

@@ -43,4 +43,13 @@ export class SettingsPaymentResponseDto {
     @Expose()
     @Type(() => SettingsPaymentGatewayResponseDto)
     gateways: SettingsPaymentGatewayResponseDto[];
+
+    @ApiPropertyOptional({
+        nullable: true,
+        description:
+            'Admin-configured USD price of one Telegram Star (null = use env default).',
+        example: 0.013,
+    })
+    @Expose()
+    telegramStarUsdRate: number | null;
 }

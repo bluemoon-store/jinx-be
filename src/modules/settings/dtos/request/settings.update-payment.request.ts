@@ -4,7 +4,9 @@ import {
     IsArray,
     IsBoolean,
     IsIn,
+    IsNumber,
     IsOptional,
+    IsPositive,
     IsString,
     MaxLength,
     ValidateNested,
@@ -71,4 +73,15 @@ export class SettingsUpdatePaymentRequestDto {
     @ValidateNested({ each: true })
     @Type(() => SettingsUpdatePaymentGatewayRequestDto)
     gateways?: SettingsUpdatePaymentGatewayRequestDto[];
+
+    @ApiPropertyOptional({
+        description:
+            'USD price of a single Telegram Star. Used to convert an order ' +
+            'total into an integer XTR amount (stars = ceil(orderUsd / rate)).',
+        example: 0.013,
+    })
+    @IsOptional()
+    @IsNumber()
+    @IsPositive()
+    telegramStarUsdRate?: number;
 }

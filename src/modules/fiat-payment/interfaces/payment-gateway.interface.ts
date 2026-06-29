@@ -10,6 +10,11 @@ export interface CreateCheckoutParams {
     currency: string; // ISO code, e.g. 'USD'
     returnUrl?: string; // where the gateway redirects the buyer back to
     expiresAt: Date; // local expiry we want the checkout to honour
+    // Pre-computed integer Telegram Stars (XTR) amount for this order. Resolved
+    // by the orchestration service from the admin/env USD-per-Star rate and
+    // ignored by gateways that charge in fiat (CHIME). Telegram has no decimal
+    // sub-unit, so this is always a whole number of Stars.
+    starAmount?: number;
 }
 
 /**

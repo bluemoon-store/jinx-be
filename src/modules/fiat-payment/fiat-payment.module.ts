@@ -13,12 +13,14 @@ import { StockLineModule } from 'src/modules/stock-line/stock-line.module';
 
 import { FIAT_PAYMENT_QUEUE } from './fiat-payment.constants';
 import { ChimeGateway } from './gateways/chime-gateway.service';
+import { TelegramStarsGateway } from './gateways/telegram-stars-gateway.service';
 import { PaymentGatewayFactory } from './gateways/payment-gateway.factory';
 import { FiatPaymentService } from './services/fiat-payment.service';
 import { FiatPaymentProcessor } from './processors/fiat-payment.processor';
 import { FiatPaymentScheduler } from './schedulers/fiat-payment.scheduler';
 import { FiatPaymentPublicController } from './controllers/fiat-payment.public.controller';
 import { FiatPaymentWebhookController } from './controllers/fiat-payment.webhook.controller';
+import { TelegramWebhookController } from './controllers/telegram-webhook.controller';
 
 @Module({
     imports: [
@@ -32,11 +34,16 @@ import { FiatPaymentWebhookController } from './controllers/fiat-payment.webhook
         BullModule.registerQueue({ name: FIAT_PAYMENT_QUEUE }),
         BullModule.registerQueue({ name: APP_BULL_QUEUES.EMAIL }),
     ],
-    controllers: [FiatPaymentPublicController, FiatPaymentWebhookController],
+    controllers: [
+        FiatPaymentPublicController,
+        FiatPaymentWebhookController,
+        TelegramWebhookController,
+    ],
     providers: [
         FiatPaymentService,
         PaymentGatewayFactory,
         ChimeGateway,
+        TelegramStarsGateway,
         // Processor + cron scheduler — worker container only
         ...workerOnlyProviders([FiatPaymentProcessor, FiatPaymentScheduler]),
     ],

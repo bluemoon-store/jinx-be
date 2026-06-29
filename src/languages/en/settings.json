@@ -9,6 +9,8 @@
         "landingUpdated": "Landing settings updated successfully",
         "paymentFound": "Payment settings retrieved successfully",
         "paymentUpdated": "Payment settings updated successfully",
+        "buyerProtectionFound": "Buyer protection settings retrieved successfully",
+        "buyerProtectionUpdated": "Buyer protection settings updated successfully",
         "emailValidityTested": "Email validity URL tested successfully"
     },
     "error": {

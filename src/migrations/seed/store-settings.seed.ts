@@ -51,7 +51,12 @@ export class StoreSettingsSeedService {
             'ltc',
             'bch',
         ];
-        const paymentGatewayCodes = ['chime', 'cashapp'];
+        const paymentGatewayCodes = [
+            'chime',
+            'cashapp',
+            'applepay',
+            'googlepay',
+        ];
 
         const paymentRows = [
             ...paymentCryptoCodes.flatMap(code => [

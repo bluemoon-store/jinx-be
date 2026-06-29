@@ -23,12 +23,13 @@ export class CreateFiatPaymentDto {
 
     @ApiPropertyOptional({
         description:
-            'Storefront method variant. Both ride the CHIME hosted checkout, ' +
-            'but map to distinct admin toggles (card -> CHIME, cashapp -> CASHAPP).',
-        enum: ['card', 'cashapp'],
+            'Storefront method variant. All ride the CHIME (Polapine) hosted ' +
+            'checkout, but map to distinct admin toggles (card -> CHIME, ' +
+            'cashapp -> CASHAPP, applepay -> APPLEPAY, googlepay -> GOOGLEPAY).',
+        enum: ['card', 'cashapp', 'applepay', 'googlepay'],
         example: 'card',
     })
     @IsOptional()
-    @IsIn(['card', 'cashapp'])
-    method?: 'card' | 'cashapp';
+    @IsIn(['card', 'cashapp', 'applepay', 'googlepay'])
+    method?: 'card' | 'cashapp' | 'applepay' | 'googlepay';
 }

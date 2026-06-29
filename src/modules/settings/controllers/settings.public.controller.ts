@@ -4,6 +4,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DocResponse } from 'src/common/doc/decorators/doc.response.decorator';
 import { PublicRoute } from 'src/common/request/decorators/request.public.decorator';
 
+import { SettingsBuyerProtectionResponseDto } from '../dtos/response/settings.buyer-protection.response';
 import { SettingsLandingResponseDto } from '../dtos/response/settings.landing.response';
 import { SettingsPaymentMethodsResponseDto } from '../dtos/response/settings.payment-methods.response';
 import { SettingsPublicResponseDto } from '../dtos/response/settings.public.response';
@@ -36,6 +37,18 @@ export class SettingsPublicController {
     })
     async getLanding(): Promise<SettingsLandingResponseDto> {
         return this.settingsService.getLanding();
+    }
+
+    @Get('buyer-protection')
+    @PublicRoute()
+    @ApiOperation({ summary: 'Get public buyer-protection settings' })
+    @DocResponse({
+        serialization: SettingsBuyerProtectionResponseDto,
+        httpStatus: HttpStatus.OK,
+        messageKey: 'settings.success.buyerProtectionFound',
+    })
+    async getBuyerProtection(): Promise<SettingsBuyerProtectionResponseDto> {
+        return this.settingsService.getBuyerProtection();
     }
 
     @Get('payment-methods')

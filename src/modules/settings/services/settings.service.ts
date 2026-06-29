@@ -27,10 +27,18 @@ import {
 import { ApiGenericResponseDto } from 'src/common/response/dtos/response.generic.dto';
 
 import {
+    BUYER_PROTECTION_SETTINGS_CATEGORY,
+    BUYER_PROTECTION_SETTINGS_KEY,
+    BuyerProtectionConfig,
+    DEFAULT_BUYER_PROTECTION,
+} from '../constants/buyer-protection-settings.constant';
+import {
     PAYMENT_CRYPTO_CODES,
     PAYMENT_GATEWAY_CODES,
     PAYMENT_SETTINGS_CATEGORY,
+    PAYMENT_TELEGRAM_STAR_USD_RATE_KEY,
 } from '../constants/payment-settings.constant';
+import { SettingsUpdateBuyerProtectionRequestDto } from '../dtos/request/settings.update-buyer-protection.request';
 import { SettingsScheduleMaintenanceRequestDto } from '../dtos/request/settings.schedule-maintenance.request';
 import { SettingsUpdateGeneralRequestDto } from '../dtos/request/settings.update-general.request';
 import { SettingsUpdateLandingRequestDto } from '../dtos/request/settings.update-landing.request';
@@ -40,12 +48,14 @@ import { SettingsEmailValidityTestResponseDto } from '../dtos/response/settings.
 import { SettingsGeneralResponseDto } from '../dtos/response/settings.general.response';
 import { SettingsLandingResponseDto } from '../dtos/response/settings.landing.response';
 import { SettingsPaymentResponseDto } from '../dtos/response/settings.payment.response';
+import { SettingsBuyerProtectionResponseDto } from '../dtos/response/settings.buyer-protection.response';
 import { SettingsPublicResponseDto } from '../dtos/response/settings.public.response';
 import { SettingsSocialResponseDto } from '../dtos/response/settings.social.response';
 
 const CACHE_KEY = 'settings:public';
 const LANDING_CACHE_KEY = 'settings:landing';
 const PAYMENT_METHODS_CACHE_KEY = 'settings:payment-methods';
+const BUYER_PROTECTION_CACHE_KEY = 'settings:buyer-protection';
 const CACHE_TTL_MS = 60_000;
 
 const KEYS = {
@@ -268,6 +278,123 @@ export class SettingsService {
         return this.getLanding();
     }
 
+    // Merge an admin patch over a base config. Only the keys present in the
+    // patch (and present in nested plan objects) override the base, so a
+    // partial PUT — or an older/partial stored row — still yields a complete,
+    // renderable config.
+    private mergeBuyerProtection(
+        base: BuyerProtectionConfig,
+        patch?: Partial<SettingsUpdateBuyerProtectionRequestDto>
+    ): BuyerProtectionConfig {
+        if (!patch) return base;
+        return {
+            enabled: patch.enabled ?? base.enabled,
+            heading: patch.heading ?? base.heading,
+            subheading: patch.subheading ?? base.subheading,
+            footerText: patch.footerText ?? base.footerText,
+            enhanced: {
+                title: patch.enhanced?.title ?? base.enhanced.title,
+                badge: patch.enhanced?.badge ?? base.enhanced.badge,
+                icon: patch.enhanced?.icon ?? base.enhanced.icon,
+                priceMode: patch.enhanced?.priceMode ?? base.enhanced.priceMode,
+                priceUsd: patch.enhanced?.priceUsd ?? base.enhanced.priceUsd,
+                pricePercent:
+                    patch.enhanced?.pricePercent ?? base.enhanced.pricePercent,
+                benefits: patch.enhanced?.benefits ?? base.enhanced.benefits,
+            },
+            basic: {
+                title: patch.basic?.title ?? base.basic.title,
+                icon: patch.basic?.icon ?? base.basic.icon,
+                benefits: patch.basic?.benefits ?? base.basic.benefits,
+            },
+        };
+    }
+
+    private parseStoredBuyerProtection(
+        value: string | undefined
+    ): BuyerProtectionConfig {
+        if (!value) return DEFAULT_BUYER_PROTECTION;
+        try {
+            const parsed = JSON.parse(value) as Partial<BuyerProtectionConfig>;
+            // Re-merge over defaults so any missing field (added after the row
+            // was written) is backfilled rather than rendering as undefined.
+            return this.mergeBuyerProtection(
+                DEFAULT_BUYER_PROTECTION,
+                parsed as SettingsUpdateBuyerProtectionRequestDto
+            );
+        } catch {
+            return DEFAULT_BUYER_PROTECTION;
+        }
+    }
+
+    async getBuyerProtection(): Promise<SettingsBuyerProtectionResponseDto> {
+        const cached = await this.cacheManager.get<BuyerProtectionConfig>(
+            BUYER_PROTECTION_CACHE_KEY
+        );
+        if (cached) return cached;
+
+        const row = await this.databaseService.systemSettings.findUnique({
+            where: { key: BUYER_PROTECTION_SETTINGS_KEY },
+            select: { value: true },
+        });
+        const config = this.parseStoredBuyerProtection(row?.value);
+
+        await this.cacheManager.set(
+            BUYER_PROTECTION_CACHE_KEY,
+            config,
+            CACHE_TTL_MS
+        );
+        return config;
+    }
+
+    async updateBuyerProtection(
+        payload: SettingsUpdateBuyerProtectionRequestDto
+    ): Promise<SettingsBuyerProtectionResponseDto> {
+        const row = await this.databaseService.systemSettings.findUnique({
+            where: { key: BUYER_PROTECTION_SETTINGS_KEY },
+            select: { value: true },
+        });
+        const current = this.parseStoredBuyerProtection(row?.value);
+        const merged = this.mergeBuyerProtection(current, payload);
+
+        await this.upsertSetting(
+            BUYER_PROTECTION_SETTINGS_KEY,
+            BUYER_PROTECTION_SETTINGS_CATEGORY,
+            JSON.stringify(merged),
+            true
+        );
+        await this.cacheManager.del(BUYER_PROTECTION_CACHE_KEY);
+
+        return merged;
+    }
+
+    // Authoritative Enhanced-protection fee charged at order creation. Returns 0
+    // when the feature is disabled, so a client that still sends
+    // `buyerProtection:true` is never charged for a hidden step. In 'percent'
+    // mode the fee is `pricePercent`% of the passed order subtotal (0 if no
+    // subtotal is available).
+    async getBuyerProtectionFeeUsd(subtotalUsd?: number): Promise<number> {
+        const config = await this.getBuyerProtection();
+        if (!config.enabled) return 0;
+
+        if (config.enhanced.priceMode === 'percent') {
+            const percent = Number(config.enhanced.pricePercent);
+            const base = Number(subtotalUsd);
+            if (
+                !Number.isFinite(percent) ||
+                percent <= 0 ||
+                !Number.isFinite(base) ||
+                base <= 0
+            ) {
+                return 0;
+            }
+            return Math.round((percent / 100) * base * 100) / 100;
+        }
+
+        const fee = Number(config.enhanced.priceUsd);
+        return Number.isFinite(fee) && fee > 0 ? fee : 0;
+    }
+
     private cryptoAddressKey(code: string): string {
         return `payment_crypto_${code.toLowerCase()}_address`;
     }
@@ -334,6 +461,9 @@ export class SettingsService {
                     byKey.get(this.gatewayEnabledKey(code))
                 ),
             })),
+            telegramStarUsdRate: this.parseStarRate(
+                byKey.get(PAYMENT_TELEGRAM_STAR_USD_RATE_KEY)
+            ),
         };
     }
 
@@ -404,11 +534,38 @@ export class SettingsService {
             }
         }
 
+        // Telegram Stars conversion rate (single key, not per-gateway).
+        if (payload.telegramStarUsdRate !== undefined) {
+            await this.upsertSetting(
+                PAYMENT_TELEGRAM_STAR_USD_RATE_KEY,
+                PAYMENT_SETTINGS_CATEGORY,
+                String(payload.telegramStarUsdRate),
+                false
+            );
+        }
+
         // Storefront reads the enabled-methods list from a cached endpoint; drop
         // the cache so admin toggles take effect immediately.
         await this.cacheManager.del(PAYMENT_METHODS_CACHE_KEY);
 
         return this.getPayment();
+    }
+
+    // Admin-set USD price of one Telegram Star, or null when unset/invalid so
+    // the live flow can fall back to the env default. Kept DB-only here (this
+    // service is intentionally decoupled from env config).
+    async getTelegramStarUsdRate(): Promise<number | null> {
+        const row = await this.databaseService.systemSettings.findUnique({
+            where: { key: PAYMENT_TELEGRAM_STAR_USD_RATE_KEY },
+            select: { value: true },
+        });
+        return this.parseStarRate(row?.value ?? null);
+    }
+
+    private parseStarRate(value: string | null | undefined): number | null {
+        if (value == null) return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     }
 
     // Public, secret-free view of which methods are enabled. Consumed by the

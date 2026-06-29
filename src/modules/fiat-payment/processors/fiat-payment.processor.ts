@@ -19,6 +19,9 @@ interface WebhookJobData {
     gateway: PaymentGateway;
     payload: unknown;
 }
+interface RefundTelegramJobData {
+    orderId: string;
+}
 
 /**
  * Fiat Payment Processor
@@ -52,6 +55,13 @@ export class FiatPaymentProcessor {
         await this.fiatPaymentService.processWebhookEvent(
             job.data.gateway,
             job.data.payload
+        );
+    }
+
+    @Process('refund-telegram')
+    async handleRefundTelegram(job: Job<RefundTelegramJobData>): Promise<void> {
+        await this.fiatPaymentService.refundTelegramStarsPayment(
+            job.data.orderId
         );
     }
 

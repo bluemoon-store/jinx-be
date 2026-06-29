@@ -41,5 +41,33 @@ export default registerAs(
                 10
             ),
         },
+
+        // Telegram Stars (XTR) via the Bot Payments API. Unlike CHIME there is
+        // no hosted checkout host/credentials — we call the Bot API directly
+        // with the bot token and confirm via the bot webhook (no status poll).
+        telegramStars: {
+            // BotFather token. The bot must already exist (see plan).
+            botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+
+            // Secret echoed by Telegram in the `X-Telegram-Bot-Api-Secret-Token`
+            // header on every webhook call (set via setWebhook's secret_token).
+            webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',
+
+            // Bot API origin (override only for a local proxy / test server).
+            apiBaseUrl:
+                process.env.TELEGRAM_API_BASE_URL || 'https://api.telegram.org',
+
+            // Fallback USD price of one Star when no admin rate is set. Stars are
+            // charged as an integer XTR amount: stars = ceil(orderUsd / rate).
+            starUsdRate: parseFloat(
+                process.env.TELEGRAM_STAR_USD_RATE || '0.013'
+            ),
+
+            // Minutes a Stars invoice stays valid before we expire it locally.
+            paymentExpiryMinutes: parseInt(
+                process.env.TELEGRAM_PAYMENT_EXPIRY_MIN || '30',
+                10
+            ),
+        },
     })
 );

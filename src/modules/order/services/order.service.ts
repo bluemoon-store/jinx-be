@@ -47,12 +47,11 @@ import {
 import { CouponWithCategories } from 'src/modules/coupon/interfaces/coupon.interface';
 import { CouponService } from 'src/modules/coupon/services/coupon.service';
 import { calculateCouponDiscount } from 'src/modules/coupon/utils/coupon-discount.util';
-import {
-    BUYER_PROTECTION_FEE_USD,
-    generateOrderNumberString,
-} from '../utils/order.util';
+import { SettingsService } from 'src/modules/settings/services/settings.service';
+import { generateOrderNumberString } from '../utils/order.util';
 import { OrderDeliveryService } from './order-delivery.service';
 import { StockLineService } from 'src/modules/stock-line/services/stock-line.service';
+import { FIAT_PAYMENT_QUEUE } from 'src/modules/fiat-payment/fiat-payment.constants';
 
 @Injectable()
 export class OrderService implements IOrderService {
@@ -64,11 +63,14 @@ export class OrderService implements IOrderService {
         private readonly couponService: CouponService,
         private readonly activityLogEmitter: ActivityLogEmitterService,
         private readonly stockLineService: StockLineService,
+        private readonly settingsService: SettingsService,
         private readonly configService: ConfigService,
         private readonly ticketService: TicketService,
         private readonly ticketMessageService: TicketMessageService,
         @InjectQueue(APP_BULL_QUEUES.EMAIL)
         private readonly emailQueue: Queue,
+        @InjectQueue(FIAT_PAYMENT_QUEUE)
+        private readonly fiatPaymentQueue: Queue,
         private readonly logger: PinoLogger
     ) {
         this.logger.setContext(OrderService.name);
@@ -289,9 +291,16 @@ export class OrderService implements IOrderService {
                 cart.items
             );
             const subtotal = parseFloat(totalAmount);
-            const buyerProtection = Boolean(data.buyerProtection);
+            // Fee is admin-configurable and authoritative: read it from settings
+            // so the charge always matches the storefront-displayed price. Returns
+            // 0 when the feature is disabled, so a request that still asks for
+            // buyer protection on a hidden step is not charged.
+            const buyerProtectionFeeUsd =
+                await this.settingsService.getBuyerProtectionFeeUsd(subtotal);
+            const buyerProtection =
+                Boolean(data.buyerProtection) && buyerProtectionFeeUsd > 0;
             const buyerProtectionUsd = buyerProtection
-                ? BUYER_PROTECTION_FEE_USD
+                ? buyerProtectionFeeUsd
                 : 0;
 
             const couponCodeRaw = data.couponCode?.trim();
@@ -980,7 +989,7 @@ export class OrderService implements IOrderService {
         try {
             const order = await this.databaseService.order.findFirst({
                 where: { id: orderId, deletedAt: null },
-                include: { items: true },
+                include: { items: true, fiatPayment: true },
             });
 
             if (!order) {
@@ -1020,7 +1029,24 @@ export class OrderService implements IOrderService {
                     ? parseFloat(order.totalAmount)
                     : Number(order.totalAmount);
 
-            if (order.userId) {
+            // Telegram Stars are refunded directly back to the payer's Telegram
+            // balance (not as store credit). Enqueue the Bot API refund; the
+            // FiatPaymentProcessor returns the Stars and marks it REFUNDED.
+            const isTelegramStars =
+                order.fiatPayment?.gateway === 'TELEGRAM_STARS' &&
+                order.fiatPayment?.status === 'PAID';
+
+            if (isTelegramStars) {
+                await this.fiatPaymentQueue.add(
+                    'refund-telegram',
+                    { orderId: order.id },
+                    {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 30_000 },
+                        removeOnComplete: true,
+                    }
+                );
+            } else if (order.userId) {
                 await this.walletService.refundBalance(
                     order.userId,
                     totalAmount,
@@ -1029,7 +1055,13 @@ export class OrderService implements IOrderService {
                 );
             }
 
-            this.logger.info({ orderId }, 'Order refunded successfully');
+            this.logger.info(
+                {
+                    orderId,
+                    refundedVia: isTelegramStars ? 'telegram_stars' : 'wallet',
+                },
+                'Order refunded successfully'
+            );
 
             return {
                 success: true,

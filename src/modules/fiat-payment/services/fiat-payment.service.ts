@@ -35,6 +35,7 @@ import { StockLineService } from 'src/modules/stock-line/services/stock-line.ser
 
 import { FIAT_PAYMENT_QUEUE } from '../fiat-payment.constants';
 import { PaymentGatewayFactory } from '../gateways/payment-gateway.factory';
+import { TelegramStarsGateway } from '../gateways/telegram-stars-gateway.service';
 import { FiatPaymentResponseDto } from '../dtos/response/fiat-payment.response';
 import { FiatPaymentStatusResponseDto } from '../dtos/response/fiat-payment-status.response';
 
@@ -62,6 +63,7 @@ export class FiatPaymentService {
     constructor(
         private readonly databaseService: DatabaseService,
         private readonly gatewayFactory: PaymentGatewayFactory,
+        private readonly telegramStarsGateway: TelegramStarsGateway,
         private readonly deliveryService: OrderDeliveryService,
         private readonly stockLineService: StockLineService,
         private readonly settingsService: SettingsService,
@@ -91,7 +93,7 @@ export class FiatPaymentService {
         gateway: PaymentGateway,
         userId: string,
         returnUrl?: string,
-        method?: 'card' | 'cashapp'
+        method?: 'card' | 'cashapp' | 'applepay' | 'googlepay'
     ): Promise<FiatPaymentResponseDto> {
         this.logger.info(
             { orderId, gateway, method, userId },
@@ -109,10 +111,21 @@ export class FiatPaymentService {
             }
             this.assertOrderAccess(order, userId);
 
-            // Reject a method an admin has disabled. Card and Cash App both ride
-            // the CHIME gateway, so the storefront's `method` is what maps each
-            // to its own admin toggle (card -> CHIME, cashapp -> CASHAPP).
-            const gatewayCode = method === 'cashapp' ? 'CASHAPP' : 'CHIME';
+            // Reject a method an admin has disabled. Card, Cash App, Apple Pay
+            // and Google Pay all ride the CHIME (Polapine) gateway, so the
+            // storefront's `method` is what maps each to its own admin toggle
+            // (card -> CHIME, cashapp -> CASHAPP, applepay -> APPLEPAY,
+            // googlepay -> GOOGLEPAY). Telegram Stars is its own gateway and
+            // maps to its own toggle.
+            const methodToCode: Record<string, string> = {
+                cashapp: 'CASHAPP',
+                applepay: 'APPLEPAY',
+                googlepay: 'GOOGLEPAY',
+            };
+            const gatewayCode =
+                gateway === PaymentGateway.TELEGRAM_STARS
+                    ? 'TELEGRAM_STARS'
+                    : ((method && methodToCode[method]) ?? 'CHIME');
             const { gateways: enabledGateways } =
                 await this.settingsService.getEnabledPaymentMethods();
             if (!enabledGateways.includes(gatewayCode)) {
@@ -153,11 +166,28 @@ export class FiatPaymentService {
                 );
             }
 
+            const isTelegram = gateway === PaymentGateway.TELEGRAM_STARS;
             const expiryMinutes =
                 this.configService.get<number>(
-                    'paymentGateway.chime.paymentExpiryMinutes'
+                    isTelegram
+                        ? 'paymentGateway.telegramStars.paymentExpiryMinutes'
+                        : 'paymentGateway.chime.paymentExpiryMinutes'
                 ) ?? 30;
             const expiresAt = new Date(now.getTime() + expiryMinutes * 60_000);
+
+            // Telegram charges an integer Stars (XTR) amount — resolve it from the
+            // admin USD-per-Star rate (falling back to the env default) so the
+            // gateway stays free of settings/config lookups.
+            let starAmount: number | undefined;
+            if (isTelegram) {
+                const rate =
+                    (await this.settingsService.getTelegramStarUsdRate()) ??
+                    this.configService.get<number>(
+                        'paymentGateway.telegramStars.starUsdRate'
+                    ) ??
+                    0.013;
+                starAmount = Math.max(1, Math.ceil(amountUsd / rate));
+            }
 
             const provider = this.gatewayFactory.getGateway(gateway);
             const checkout = await provider.createCheckout({
@@ -167,6 +197,7 @@ export class FiatPaymentService {
                 currency: order.currency,
                 returnUrl,
                 expiresAt,
+                starAmount,
             });
 
             const effectiveExpiry = checkout.expiresAt ?? expiresAt;
@@ -462,6 +493,97 @@ export class FiatPaymentService {
         }
 
         await this.applyStatus(payment, event.status, event.paidAt);
+    }
+
+    /**
+     * Handle a verified Telegram `successful_payment` update. Persists the
+     * charge id + payer id (needed to refund later) into metadata, then drives
+     * the standard paid -> order-completed sequence. Idempotent: a duplicate
+     * update is a no-op once the order is COMPLETED.
+     */
+    async handleTelegramSuccessfulPayment(success: {
+        invoicePayload: string;
+        telegramPaymentChargeId: string;
+        telegramUserId: number;
+        totalAmount: number;
+    }): Promise<void> {
+        const payment = await this.databaseService.fiatPayment.findFirst({
+            where: {
+                gateway: PaymentGateway.TELEGRAM_STARS,
+                externalId: success.invoicePayload,
+            },
+        });
+        if (!payment) {
+            this.logger.warn(
+                { invoicePayload: success.invoicePayload },
+                'Telegram successful_payment references unknown fiat payment'
+            );
+            return;
+        }
+
+        const baseMeta =
+            payment.metadata && typeof payment.metadata === 'object'
+                ? (payment.metadata as Record<string, unknown>)
+                : {};
+        await this.databaseService.fiatPayment.update({
+            where: { id: payment.id },
+            data: {
+                metadata: {
+                    ...baseMeta,
+                    telegram_payment_charge_id: success.telegramPaymentChargeId,
+                    telegram_user_id: success.telegramUserId,
+                    telegram_total_stars: success.totalAmount,
+                } as Prisma.InputJsonValue,
+            },
+        });
+
+        await this.applyStatus(payment, FiatPaymentStatus.PAID, new Date());
+    }
+
+    /**
+     * Refund a paid Telegram Stars order by returning the Stars to the payer
+     * via the Bot API, then mark the FiatPayment REFUNDED. No-op when the order
+     * was not paid with Stars or lacks the charge id we need. Throws on Bot API
+     * failure so the caller (admin refund) can surface it.
+     */
+    async refundTelegramStarsPayment(orderId: string): Promise<void> {
+        const payment = await this.databaseService.fiatPayment.findUnique({
+            where: { orderId },
+        });
+        if (
+            !payment ||
+            payment.gateway !== PaymentGateway.TELEGRAM_STARS ||
+            payment.status !== FiatPaymentStatus.PAID
+        ) {
+            return;
+        }
+
+        const meta =
+            payment.metadata && typeof payment.metadata === 'object'
+                ? (payment.metadata as Record<string, unknown>)
+                : {};
+        const chargeId = meta.telegram_payment_charge_id as string | undefined;
+        const userId = Number(meta.telegram_user_id ?? 0);
+
+        if (!chargeId || !userId) {
+            this.logger.warn(
+                { orderId, paymentId: payment.id },
+                'Cannot refund Telegram Stars payment: missing charge id / user id'
+            );
+            return;
+        }
+
+        await this.telegramStarsGateway.refundStarPayment(userId, chargeId);
+
+        await this.databaseService.fiatPayment.update({
+            where: { id: payment.id },
+            data: { status: FiatPaymentStatus.REFUNDED },
+        });
+
+        this.logger.info(
+            { orderId, paymentId: payment.id },
+            'Telegram Stars payment refunded'
+        );
     }
 
     /** Route a normalised status to the correct local transition. */

@@ -4,6 +4,7 @@ import { PaymentGateway } from '@prisma/client';
 
 import { IPaymentGateway } from '../interfaces/payment-gateway.interface';
 import { ChimeGateway } from './chime-gateway.service';
+import { TelegramStarsGateway } from './telegram-stars-gateway.service';
 
 /**
  * Payment Gateway Factory
@@ -16,11 +17,16 @@ export class PaymentGatewayFactory {
 
     constructor(
         private readonly logger: PinoLogger,
-        private readonly chimeGateway: ChimeGateway
+        private readonly chimeGateway: ChimeGateway,
+        private readonly telegramStarsGateway: TelegramStarsGateway
     ) {
         this.logger.setContext(PaymentGatewayFactory.name);
         this.gateways = new Map();
         this.gateways.set(PaymentGateway.CHIME, this.chimeGateway);
+        this.gateways.set(
+            PaymentGateway.TELEGRAM_STARS,
+            this.telegramStarsGateway
+        );
 
         this.logger.info(
             { supportedGateways: Array.from(this.gateways.keys()) },
