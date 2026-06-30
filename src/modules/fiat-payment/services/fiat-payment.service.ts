@@ -39,6 +39,7 @@ import { PaymentGatewayFactory } from '../gateways/payment-gateway.factory';
 import { TelegramStarsGateway } from '../gateways/telegram-stars-gateway.service';
 import { FiatPaymentResponseDto } from '../dtos/response/fiat-payment.response';
 import { FiatPaymentStatusResponseDto } from '../dtos/response/fiat-payment-status.response';
+import { generateP2PPaymentQRCode } from '../utils/qr-code.util';
 
 /** Statuses considered "active" — a checkout the buyer can still complete. */
 const ACTIVE_STATUSES: FiatPaymentStatus[] = [
@@ -118,12 +119,11 @@ export class FiatPaymentService {
             }
             this.assertOrderAccess(order, userId);
 
-            // Reject a method an admin has disabled. Card, Cash App, Apple Pay
-            // and Google Pay all ride the CHIME (Polapine) gateway, so the
+            // Reject a method an admin has disabled. Cash App, Apple Pay and
+            // Google Pay all ride the CHIME (Polapine) gateway, so the
             // storefront's `method` is what maps each to its own admin toggle
-            // (card -> CHIME, cashapp -> CASHAPP, applepay -> APPLEPAY,
-            // googlepay -> GOOGLEPAY). Telegram Stars is its own gateway and
-            // maps to its own toggle.
+            // (cashapp -> CASHAPP, applepay -> APPLEPAY, googlepay -> GOOGLEPAY).
+            // Telegram Stars is its own gateway and maps to its own toggle.
             // MANUAL_P2P (self-hosted Chime/Venmo) selects its rail via `method`
             // and maps to its own admin toggle (chime -> CHIME_P2P, venmo -> VENMO).
             const isManualP2P = gateway === PaymentGateway.MANUAL_P2P;
@@ -185,7 +185,7 @@ export class FiatPaymentService {
                     hasArtifact &&
                     sameTarget;
                 if (active) {
-                    return this.mapToResponseDto(existing);
+                    return await this.mapToResponseDto(existing);
                 }
             }
 
@@ -333,7 +333,7 @@ export class FiatPaymentService {
                 'Fiat payment created'
             );
 
-            return this.mapToResponseDto(payment);
+            return await this.mapToResponseDto(payment);
         } catch (error) {
             if (
                 error instanceof NotFoundException ||
@@ -369,7 +369,7 @@ export class FiatPaymentService {
                 `No fiat payment found for order: ${orderId}`
             );
         }
-        return this.mapToResponseDto(order.fiatPayment);
+        return await this.mapToResponseDto(order.fiatPayment);
     }
 
     async getPaymentStatusByOrderId(
@@ -720,7 +720,29 @@ export class FiatPaymentService {
         );
     }
 
-    private mapToResponseDto(payment: FiatPayment): FiatPaymentResponseDto {
+    private async mapToResponseDto(
+        payment: FiatPayment
+    ): Promise<FiatPaymentResponseDto> {
+        // MANUAL_P2P (Chime/Venmo): derive a QR from the destination tag on read.
+        // Stateless (no column), and a generation failure must never break the
+        // checkout response — the FE falls back to a placeholder.
+        let qrCode: string | undefined;
+        if (payment.provider && payment.destinationTag) {
+            try {
+                qrCode = await generateP2PPaymentQRCode(
+                    payment.provider,
+                    payment.destinationTag,
+                    payment.amount.toString(),
+                    payment.requiredNote ?? undefined
+                );
+            } catch (error) {
+                this.logger.warn(
+                    { error, paymentId: payment.id },
+                    'P2P QR generation failed'
+                );
+            }
+        }
+
         return {
             paymentId: payment.id,
             orderId: payment.orderId,
@@ -731,6 +753,7 @@ export class FiatPaymentService {
             provider: payment.provider ?? undefined,
             destinationTag: payment.destinationTag ?? undefined,
             requiredNote: payment.requiredNote ?? undefined,
+            qrCode,
             status: payment.status,
             expiresAt: payment.expiresAt,
             timeRemaining: this.timeRemaining(payment.expiresAt),

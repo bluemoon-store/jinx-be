@@ -51,6 +51,12 @@ export class FiatPaymentResponseDto {
     @Expose()
     requiredNote?: string;
 
+    @ApiPropertyOptional({
+        description: 'MANUAL_P2P only: base64 QR data URL for the payment',
+    })
+    @Expose()
+    qrCode?: string;
+
     @ApiProperty({ description: 'Payment status', enum: FiatPaymentStatus })
     @Expose()
     status: FiatPaymentStatus;

@@ -12,7 +12,6 @@ export const PAYMENT_CRYPTO_CODES = [
 ] as const;
 
 export const PAYMENT_GATEWAY_CODES = [
-    'CHIME',
     'CASHAPP',
     'APPLEPAY',
     'GOOGLEPAY',
